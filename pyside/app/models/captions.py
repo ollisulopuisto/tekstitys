@@ -881,10 +881,14 @@ class ProjectState:
     ) -> float:
         if default_y is None:
             default_y = self.style.anchor_pct
+        if not self.position_overrides:
+            return default_y
         midpoint = (seg.start_ms + seg.end_ms) // 2
-        for ov in self.position_overrides:
-            if ov.start_ms <= midpoint <= ov.end_ms:
-                return ov.y_pct
+        # Overrides can overlap after retiming or re-chunking, and their source
+        # order is also export's precedence. Do not sort or bisect this list.
+        for override in self.position_overrides:
+            if override.start_ms <= midpoint <= override.end_ms:
+                return override.y_pct
         return default_y
 
     def set_segment_position_override(self, seg: CaptionSegment, y_pct: float) -> None:
