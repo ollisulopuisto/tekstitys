@@ -884,20 +884,11 @@ class ProjectState:
         if not self.position_overrides:
             return default_y
         midpoint = (seg.start_ms + seg.end_ms) // 2
-        # position_overrides is kept sorted by start_ms with non-overlapping
-        # spans (caption segments never overlap), so bisect jumps straight to
-        # the override covering the midpoint instead of scanning every override
-        # on each playback tick (~20x faster at 1,000 overrides).
-        idx = (
-            bisect.bisect_right(
-                self.position_overrides, midpoint, key=lambda ov: ov.start_ms
-            )
-            - 1
-        )
-        if idx >= 0:
-            ov = self.position_overrides[idx]
-            if ov.start_ms <= midpoint <= ov.end_ms:
-                return ov.y_pct
+        # Overrides can overlap after retiming or re-chunking, and their source
+        # order is also export's precedence. Do not sort or bisect this list.
+        for override in self.position_overrides:
+            if override.start_ms <= midpoint <= override.end_ms:
+                return override.y_pct
         return default_y
 
     def set_segment_position_override(self, seg: CaptionSegment, y_pct: float) -> None:
@@ -916,10 +907,6 @@ class ProjectState:
                 y_pct=round(y_pct, 1),
             )
         )
-        # Keep overrides sorted by start_ms so get_anchor_y_for_segment can
-        # bisect instead of scanning; overrides are non-overlapping because
-        # caption segments never overlap.
-        self.position_overrides.sort(key=lambda ov: ov.start_ms)
         self.is_dirty = True
 
     def ensure_position(self) -> None:
@@ -958,11 +945,7 @@ class ProjectState:
             content = target.read_text(encoding="utf-8")
             cf = CaptionsFile.from_json_str(content)
             self.segments = cf.segments
-            # Keep overrides sorted by start_ms so get_anchor_y_for_segment
-            # can bisect instead of scanning on every playback tick.
-            self.position_overrides = sorted(
-                cf.position_overrides, key=lambda ov: ov.start_ms
-            )
+            self.position_overrides = cf.position_overrides
             self.style = cf.style
             self.trim_start_ms = cf.trim_start_ms
             self.trim_end_ms = cf.trim_end_ms
