@@ -98,3 +98,9 @@ timecode edit or timeline drag left stale times when the cue object was
 unchanged. _retime_segment and cue_moved_on_timeline now refresh the strip;
 a test pins both paths.
 
+Review follow-up: added a reachability test that walks every action button
+of the pre-tabs header (Transcribe, Orukeet, Add, Auto Dodge, Fix Syllables,
+Group Words, Fix Orphans, Save, In/Out, both Shifts, Delete Empty) up its
+parent chain and asserts it lands on a tab page, then switches to that tab
+and asserts the button is visible. Guards the tabs rebuild against creating
+a control but never placing it.
