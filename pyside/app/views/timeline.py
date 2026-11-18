@@ -267,7 +267,6 @@ class VisualTimelineWidget(QWidget):
         pct = max(0.0, min(1.0, x / max(1, self.width() - 1)))
         return int(pct * self.duration_ms)
 
-
     def _lane_count(self) -> int:
         """Two lanes when the track is tall enough, one otherwise."""
         track_h = self.height() - _TRACK_TOP - 4
@@ -748,9 +747,7 @@ class TimelineScroll(QScrollArea):
     def set_track_height(self, height: int) -> None:
         """Resize the timeline, and this scroll area around it, to `height` px."""
         self.timeline.setFixedHeight(height)
-        self.setFixedHeight(
-            height + self.horizontalScrollBar().sizeHint().height()
-        )
+        self.setFixedHeight(height + self.horizontalScrollBar().sizeHint().height())
 
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)

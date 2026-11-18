@@ -1511,6 +1511,7 @@ def test_action_bar_is_one_row_when_wide_and_wraps_when_narrow(qtbot):
     window.resize(1920, 1080)
     window.show()
     qtbot.wait(50)
+
     def visible_ys() -> set[int]:
         ys = set()
         for i in range(window.action_bar.count()):
