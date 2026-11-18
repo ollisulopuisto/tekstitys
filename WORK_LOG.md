@@ -93,3 +93,8 @@ their order, Edit as home, only the current page visible, strip content in
 every tab, proofreading counts, badge values. Verified visually with
 offscreen grabs of all five tabs at 1280x800. macOS GUI not run locally.
 
+Devin finding (fixed): the strip cached the selected cue's timestamps, so a
+timecode edit or timeline drag left stale times when the cue object was
+unchanged. _retime_segment and cue_moved_on_timeline now refresh the strip;
+a test pins both paths.
+

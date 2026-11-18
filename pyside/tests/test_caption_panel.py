@@ -811,3 +811,21 @@ def test_proofreading_defaults_and_off_clear_results(qtbot):
     panel.proofreader.rows = ((Issue(3, 5, "Test", ("eivät",), "grammar"),),)
     panel.combo_proofreading.setCurrentIndex(0)
     assert panel.proofreading_for_row(0) == ()
+
+
+def test_strip_follows_retiming_of_the_selected_caption(qtbot):
+    panel = CaptionPanelWidget()
+    qtbot.addWidget(panel)
+    panel.set_segments([CaptionSegment(start_ms=5100, end_ms=8200, text="Moikka")])
+    panel.cue_table.selectRow(0)
+    assert "00:08.200" in panel.strip_label.text()
+
+    # A timecode edit in the table refreshes the strip...
+    panel._retime_segment(0, 5100, 9000)
+    assert "00:09.000" in panel.strip_label.text()
+
+    # ...and so does a timeline drag landing on the same cue object.
+    panel.cue_moved_on_timeline(panel.segments[0])
+    panel.segments[0].end_ms = 10000
+    panel.cue_moved_on_timeline(panel.segments[0])
+    assert "00:10.000" in panel.strip_label.text()

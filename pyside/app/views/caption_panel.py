@@ -1384,6 +1384,7 @@ class CaptionPanelWidget(QWidget):
         start_ms, end_ms = clamped_segment_time(self.segments, row, start_ms, end_ms)
         set_segment_time(seg, start_ms, end_ms)
         self._refresh_time_cells(row)
+        self._update_strip()
         self.segment_updated.emit(seg)
         self.segments_updated.emit(self.segments)
 
@@ -1450,6 +1451,7 @@ class CaptionPanelWidget(QWidget):
         if row < 0:
             return
         self._refresh_time_cells(row)
+        self._update_strip()
         self.segment_updated.emit(seg)
         self.segments_updated.emit(self.segments)
 
