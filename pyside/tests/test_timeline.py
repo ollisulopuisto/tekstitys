@@ -622,3 +622,115 @@ def test_dragging_a_caption_on_the_lower_lane(qtbot):
     lane0_y = int(timeline._lane_span(0)[0] + 10)
     _drag(qtbot, timeline, 700, 750, y=lane0_y)
     assert seg2.start_ms == seg2_start
+
+
+def test_reloaded_captions_keep_their_lanes(qtbot):
+    """New caption objects with the same times/text must be re-laned, not
+    fall back to the upper lane because the time signature is unchanged."""
+    timeline = VisualTimelineWidget()
+    qtbot.addWidget(timeline)
+    timeline.setFixedHeight(140)
+    timeline.resize(800, 140)
+    original = [
+        CaptionSegment(start_ms=i * 3000, end_ms=i * 3000 + 2500, text=f"Cue {i}")
+        for i in range(3)
+    ]
+    timeline.set_segments(original)
+    # Build the lane map before the reload, so a stale cache would be reused.
+    assert [timeline._lane_of(seg) for seg in original] == [0, 1, 0]
+    reloaded = [
+        CaptionSegment(start_ms=i * 3000, end_ms=i * 3000 + 2500, text=f"Cue {i}")
+        for i in range(3)
+    ]
+    timeline.set_segments(reloaded)
+
+    assert [timeline._lane_of(seg) for seg in reloaded] == [0, 1, 0]
+
+
+def test_a_long_caption_keeps_its_lane_past_crowded_intervals(qtbot):
+    """A shorter overlapping cue must not shrink its lane's busy-until time,
+    or a later cue gets placed on top of the long one."""
+    timeline = VisualTimelineWidget()
+    qtbot.addWidget(timeline)
+    timeline.setFixedHeight(140)
+    timeline.resize(800, 140)
+    a = CaptionSegment(start_ms=0, end_ms=10000, text="A")
+    b = CaptionSegment(start_ms=1000, end_ms=2000, text="B")
+    c = CaptionSegment(start_ms=2500, end_ms=4000, text="C")
+    d = CaptionSegment(start_ms=3000, end_ms=3500, text="D")
+    e = CaptionSegment(start_ms=4500, end_ms=4800, text="E")
+    f = CaptionSegment(start_ms=5000, end_ms=5300, text="F")
+    timeline.set_segments([a, b, c, d, e, f])
+
+    # F starts while A is still running, so F must not land on A's lane.
+    assert timeline._lane_of(a) == 0
+    assert timeline._lane_of(f) == 1
+
+
+def test_painting_builds_the_lane_map_once(qtbot):
+    timeline = VisualTimelineWidget()
+    qtbot.addWidget(timeline)
+    timeline.setFixedHeight(140)
+    timeline.resize(800, 140)
+    timeline.set_duration(20000)
+    timeline.set_segments(
+        [
+            CaptionSegment(start_ms=i * 2000, end_ms=i * 2000 + 1500, text=f"Cue {i}")
+            for i in range(8)
+        ]
+    )
+
+    calls = 0
+    original = timeline._segments_signature
+
+    def counting():
+        nonlocal calls
+        calls += 1
+        return original()
+
+    timeline._segments_signature = counting
+    timeline.grab()
+    # One build for the paint cache key, one for the lane map: linear per
+    # paint, not per cue.
+    assert calls <= 2, (
+        f"lane map rebuilt per cue during paint ({calls} signature builds)"
+    )
+
+
+def test_clicking_an_overlapping_caption_selects_the_clicked_one(qtbot):
+    """With overlapping captions on separate lanes, the lane-aware hit must
+    win over the time-based first match."""
+    timeline = VisualTimelineWidget()
+    timeline.setFixedHeight(140)
+    timeline.resize(1000, 140)
+    timeline.set_duration(10000)
+    qtbot.addWidget(timeline)
+    timeline.show()
+    a = CaptionSegment(start_ms=1000, end_ms=7000, text="A (top)")
+    b = CaptionSegment(start_ms=3000, end_ms=5000, text="B (bottom)")
+    timeline.set_segments([a, b])
+    retimed = []
+    timeline.cue_retimed.connect(retimed.append)
+
+    assert timeline._lane_of(a) == 0
+    assert timeline._lane_of(b) == 1
+    lane1_y = int(timeline._lane_span(1)[0] + 10)
+    qtbot.mouseClick(
+        timeline,
+        Qt.MouseButton.LeftButton,
+        pos=QPoint(int(timeline._ms_to_x(4000)), lane1_y),
+    )
+
+    assert timeline.selected_segment is b
+
+    # The drag target is the same caption that was selected.
+    lane1_y = int(timeline._lane_span(1)[0] + 10)
+    _drag(
+        qtbot,
+        timeline,
+        int(timeline._ms_to_x(4000)),
+        int(timeline._ms_to_x(4500)),
+        y=lane1_y,
+    )
+    assert retimed and retimed[-1] is b
+    assert a.start_ms == 1000 and a.end_ms == 7000

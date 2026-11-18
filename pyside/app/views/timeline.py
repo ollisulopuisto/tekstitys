@@ -237,6 +237,8 @@ class VisualTimelineWidget(QWidget):
         self.segments = list(segments)
         self._refresh_segment_flags()
         self._invalidate_static()
+        # New caption objects need new lanes even when times and text match.
+        self._lanes_key = None
         self.update()
 
     def _refresh_segment_flags(self) -> None:
@@ -298,7 +300,9 @@ class VisualTimelineWidget(QWidget):
                         if last_end[previous] <= seg.start_ms:
                             lane = previous
                 lanes[id(seg)] = lane
-                last_end[lane] = seg.end_ms
+                # A shorter cue overlapping a longer one must not free the
+                # lane early, or a later cue lands on top of the long one.
+                last_end[lane] = max(last_end[lane], seg.end_ms)
                 previous = lane
             self._lanes_cache = lanes
             self._lanes_key = key
@@ -473,11 +477,15 @@ class VisualTimelineWidget(QWidget):
             target_ms = self._x_to_ms(event.position().x())
             self.current_position_ms = target_ms
 
-            # Check if clicked inside a segment
+            # A click on a caption block selects that block; overlapping
+            # captions sit on separate lanes, so the lane-aware hit decides.
+            # Scrubbing the ruler or clicking empty track keeps the
+            # time-based first match.
+            hit = self._cue_at(event.position().x(), event.position().y())
             # Use binary search only when ordering and non-overlap are known;
             # unusual sidecars retain the original first-match behavior.
-            clicked_seg = None
-            if self._segments_non_overlapping:
+            clicked_seg = hit[0] if hit else None
+            if clicked_seg is None and self._segments_non_overlapping:
                 idx = (
                     bisect.bisect_right(
                         self.segments, target_ms, key=lambda s: s.start_ms
@@ -488,7 +496,7 @@ class VisualTimelineWidget(QWidget):
                     cand = self.segments[idx]
                     if cand.start_ms <= target_ms <= cand.end_ms:
                         clicked_seg = cand
-            else:
+            elif clicked_seg is None:
                 clicked_seg = next(
                     (
                         seg
@@ -503,7 +511,6 @@ class VisualTimelineWidget(QWidget):
                 self.segment_selected.emit(clicked_seg)
 
             self.seek_requested.emit(target_ms)
-            hit = self._cue_at(event.position().x(), event.position().y())
             if hit:
                 seg, mode = hit
                 self._cue_drag = _CueDrag(
@@ -700,6 +707,8 @@ class VisualTimelineWidget(QWidget):
 
         painter.setFont(cue_font)
         metrics = QFontMetrics(cue_font)
+        # Lane assignment is built once per paint, not per cue.
+        lanes = self._lanes()
         # Use bisect to quickly skip segments outside the visible clip region
         # when segments are sorted and non-overlapping.
         if self._segments_non_overlapping and self.segments:
@@ -716,7 +725,7 @@ class VisualTimelineWidget(QWidget):
                     break
                 seg_w = max(6.0, self._ms_to_x(seg.end_ms) - x_start)
                 if x_start + seg_w >= clip_left:
-                    self._paint_cue(painter, seg, metrics)
+                    self._paint_cue(painter, seg, metrics, lanes.get(id(seg), 0))
                 idx += 1
         else:
             for seg in self.segments:
@@ -724,16 +733,20 @@ class VisualTimelineWidget(QWidget):
                 seg_w = max(6.0, self._ms_to_x(seg.end_ms) - x_start)
                 if x_start > clip_right or x_start + seg_w < clip_left:
                     continue
-                self._paint_cue(painter, seg, metrics)
+                self._paint_cue(painter, seg, metrics, lanes.get(id(seg), 0))
 
     def _paint_cue(
-        self, painter: QPainter, seg: CaptionSegment, metrics: QFontMetrics
+        self,
+        painter: QPainter,
+        seg: CaptionSegment,
+        metrics: QFontMetrics,
+        lane: int,
     ) -> None:
         """One caption block, in the track below the ruler. The painter's font
         is already the cue font."""
         # Caption track section (from y=24 to y=h-6), split into lanes
         # when the track is tall.
-        track_y, track_h = self._lane_span(self._lane_of(seg))
+        track_y, track_h = self._lane_span(lane)
         x_start = self._ms_to_x(seg.start_ms)
         x_end = self._ms_to_x(seg.end_ms)
         seg_w = max(6.0, x_end - x_start)
