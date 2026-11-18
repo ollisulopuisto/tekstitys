@@ -875,3 +875,35 @@ def test_chunk_long_segments_honours_a_custom_cap():
     )
     chunks = chunk_long_segments([seg], max_words=4)
     assert [len(c.words) for c in chunks] == [4, 4, 1]
+
+
+def test_chunk_long_segments_considers_the_pause_after_the_capped_word():
+    texts = [f"sana{i}" for i in range(8)]
+    words = _words(texts)
+    # A small pause after word 3 and the real pause right after word 6 (the
+    # cap): the cut should use the full block, not the earlier smaller pause.
+    for i in range(3, 8):
+        words[i].start_ms += 100
+        words[i].end_ms += 100
+    for i in range(6, 8):
+        words[i].start_ms += 900
+        words[i].end_ms += 900
+    seg = CaptionSegment(start_ms=0, end_ms=4200, text=" ".join(texts), words=words)
+    chunks = chunk_long_segments([seg], max_words=6)
+    assert [len(c.words) for c in chunks] == [6, 2]
+
+
+def test_chunk_long_segments_never_ends_a_chunk_on_a_finnish_orphan_word():
+    texts = ["yksi", "kaksi", "kolme", "neljä", "viisi", "ja", "seitsemän", "kahdeksan"]
+    words = _words(texts)
+    # The biggest pause is after "ja", but a chunk must not end on it:
+    # the conjunction starts the next chunk instead.
+    for i in range(6, 8):
+        words[i].start_ms += 900
+        words[i].end_ms += 900
+    seg = CaptionSegment(start_ms=0, end_ms=4100, text=" ".join(texts), words=words)
+    chunks = chunk_long_segments([seg], max_words=6)
+    assert [c.text for c in chunks] == [
+        "yksi kaksi kolme neljä viisi",
+        "ja seitsemän kahdeksan",
+    ]

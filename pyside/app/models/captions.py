@@ -381,20 +381,38 @@ def _word_spans_for_chunking(seg: CaptionSegment) -> list[WordSpan]:
 
 
 def _choose_chunk_cut(words: list[WordSpan], max_words: int) -> int:
-    """Where to cut a cue that is too long: sentence end, else the longest pause."""
-    window = words[:max_words]
-    for i in range(len(window), 0, -1):
-        if window[i - 1].text.rstrip().endswith(SENTENCE_ENDINGS):
+    """Where to cut a cue that is too long: sentence end, else the longest pause.
+
+    Cuts run 1..max_words, so the pause right after the word at the cap is a
+    candidate too. A cut never lands after a Finnish orphan word (ja, tai,
+    ...): the conjunction starts the next chunk, matching apply_orphan_rules.
+    """
+
+    def orphan_end(i: int) -> bool:
+        clean = words[i - 1].text.strip().strip(".,!?:;-\"'\u201d\u201c\u2019").lower()
+        return clean in FINNISH_ORPHAN_WORDS
+
+    for i in range(max_words, 0, -1):
+        if not orphan_end(i) and words[i - 1].text.rstrip().endswith(SENTENCE_ENDINGS):
             return i
     # No punctuation to break at: the longest pause is the least bad cut.
     # Ties favour the latest cut, so even spacing fills the cap.
-    best_cut = max_words
+    best_cut = 0
     best_gap = 0
-    for i in range(1, len(window)):
-        gap = window[i].start_ms - window[i - 1].end_ms
+    for i in range(1, max_words + 1):
+        if orphan_end(i):
+            continue
+        gap = words[i].start_ms - words[i - 1].end_ms
         if gap > 0 and gap >= best_gap:
             best_gap, best_cut = gap, i
-    return best_cut
+    if best_cut:
+        return best_cut
+    # No pause inside the cap: take the largest cut that does not strand an
+    # orphan, and only give up on that if every candidate would.
+    for i in range(max_words, 0, -1):
+        if not orphan_end(i):
+            return i
+    return max_words
 
 
 def chunk_long_segments(

@@ -51,3 +51,10 @@ cap, untouched short cues, interpolated timings, break_after placement,
 custom cap). Full suite: 49 failures, all pre-existing on clean main in this
 environment (no Rust core binary, portal/macOS deps); none new. ruff clean.
 
+Review fixes (head 9ebb8bb findings, Devin agreed on the first two):
+1. The pause search now also considers the pause right after the word at the
+   cap, so a full-size block is cut there instead of one word early.
+2. A cut never lands after a Finnish orphan word (FINNISH_ORPHAN_WORDS, the
+   same list apply_orphan_rules uses): the conjunction starts the next chunk.
+3. The max-words spin box has a test (default, 2-20 bounds, persistence).
+
