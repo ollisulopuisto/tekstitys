@@ -9,6 +9,7 @@ from app.models.captions import (
     WordSpan,
     apply_orphan_rules,
     chars_per_second,
+    chunk_long_segments,
     clamped_segment_time,
     combine_separated_syllables,
     delete_segment,
@@ -738,3 +739,139 @@ def test_timing_flag_compares_text_length_with_the_time_given():
     assert timing_flag(empty) is None
     assert chars_per_second(empty) is None
     assert chars_per_second(fits) == len("Kuinka huolissanne") / 2
+
+
+def _words(texts, start=0, step=400):
+    return [
+        WordSpan(start_ms=start + i * step, end_ms=start + (i + 1) * step, text=t)
+        for i, t in enumerate(texts)
+    ]
+
+
+def test_chunk_long_segments_splits_at_sentence_punctuation_first():
+    seg = CaptionSegment(
+        start_ms=0,
+        end_ms=4000,
+        text=" ".join(
+            [
+                "Ja",
+                "siis",
+                "kun",
+                "mä",
+                "olin",
+                "Hesarissa.",
+                "Sitten",
+                "mä",
+                "lähdin",
+                "pois.",
+            ]
+        ),
+        words=_words(
+            [
+                "Ja",
+                "siis",
+                "kun",
+                "mä",
+                "olin",
+                "Hesarissa.",
+                "Sitten",
+                "mä",
+                "lähdin",
+                "pois.",
+            ]
+        ),
+    )
+    chunks = chunk_long_segments([seg], max_words=6)
+    assert [c.text for c in chunks] == [
+        "Ja siis kun mä olin Hesarissa.",
+        "Sitten mä lähdin pois.",
+    ]
+    assert all(len(c.words) <= 6 for c in chunks)
+    assert chunks[0].start_ms == 0
+    assert chunks[0].end_ms == 2400
+    assert chunks[1].start_ms == 2400
+    assert chunks[1].end_ms == 4000
+
+
+def test_chunk_long_segments_prefers_the_longest_pause_without_punctuation():
+    texts = [
+        "yksi",
+        "kaksi",
+        "kolme",
+        "neljä",
+        "viisi",
+        "kuusi",
+        "seitsemän",
+        "kahdeksan",
+    ]
+    words = _words(texts)
+    # A 900 ms pause after the third word.
+    for i in range(3, 8):
+        words[i].start_ms += 900
+        words[i].end_ms += 900
+    seg = CaptionSegment(start_ms=0, end_ms=4100, text=" ".join(texts), words=words)
+    chunks = chunk_long_segments([seg], max_words=6)
+    assert [c.text for c in chunks] == [
+        "yksi kaksi kolme",
+        "neljä viisi kuusi seitsemän kahdeksan",
+    ]
+
+
+def test_chunk_long_segments_hard_caps_without_punctuation_or_pauses():
+    texts = [f"sana{i}" for i in range(14)]
+    seg = CaptionSegment(
+        start_ms=0, end_ms=5600, text=" ".join(texts), words=_words(texts)
+    )
+    chunks = chunk_long_segments([seg], max_words=6)
+    assert [len(c.words) for c in chunks] == [6, 6, 2]
+    # No word is lost or duplicated.
+    assert [w.text for c in chunks for w in c.words] == texts
+
+
+def test_chunk_long_segments_leaves_short_segments_untouched():
+    seg = CaptionSegment(
+        start_ms=0,
+        end_ms=2000,
+        text="vain neljä sanaa tässä",
+        words=_words(["vain", "neljä", "sanaa", "tässä"]),
+    )
+    assert chunk_long_segments([seg], max_words=6) == [seg]
+
+
+def test_chunk_long_segments_interpolates_missing_word_timings():
+    seg = CaptionSegment(
+        start_ms=1000,
+        end_ms=9000,
+        text=" ".join(f"sana{i}" for i in range(8)),
+    )
+    chunks = chunk_long_segments([seg], max_words=6)
+    assert [len(c.words) for c in chunks] == [6, 2]
+    assert chunks[0].start_ms == 1000
+    assert chunks[-1].end_ms == 9000
+    for prev, nxt in zip(chunks, chunks[1:]):
+        assert prev.end_ms <= nxt.start_ms
+    for c in chunks:
+        for w in c.words:
+            assert c.start_ms <= w.start_ms < w.end_ms <= c.end_ms
+
+
+def test_chunk_long_segments_keeps_break_after_on_the_last_chunk_only():
+    texts = [f"sana{i}" for i in range(8)]
+    seg = CaptionSegment(
+        start_ms=0,
+        end_ms=3200,
+        text=" ".join(texts),
+        words=_words(texts),
+        break_after=True,
+    )
+    chunks = chunk_long_segments([seg], max_words=6)
+    assert [c.break_after for c in chunks] == [False, True]
+
+
+def test_chunk_long_segments_honours_a_custom_cap():
+    texts = [f"sana{i}" for i in range(9)]
+    seg = CaptionSegment(
+        start_ms=0, end_ms=3600, text=" ".join(texts), words=_words(texts)
+    )
+    chunks = chunk_long_segments([seg], max_words=4)
+    assert [len(c.words) for c in chunks] == [4, 4, 1]

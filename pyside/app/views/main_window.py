@@ -50,10 +50,12 @@ from app.models.history import History
 from app.models.captions import CaptionsFile
 from app.core_client import CoreClient
 from app.models.captions import (
+    DEFAULT_MAX_CAPTION_WORDS,
     CaptionSegment,
     CaptionStyle,
     ProjectState,
     apply_orphan_rules,
+    chunk_long_segments,
     combine_separated_syllables,
 )
 from app.portal_client import Portal, PortalError
@@ -2210,6 +2212,17 @@ class MainWindow(QMainWindow):
                 new_segs = [CaptionSegment.from_dict(s) for s in segments_raw]
                 new_segs = combine_separated_syllables(new_segs)
                 new_segs = apply_orphan_rules(new_segs)
+                # Whisper cues run long; break them into readable blocks.
+                new_segs = chunk_long_segments(
+                    new_segs,
+                    max_words=int(
+                        QSettings().value(
+                            "transcription/max_caption_words",
+                            DEFAULT_MAX_CAPTION_WORDS,
+                            type=int,
+                        )
+                    ),
+                )
                 count = len(new_segs)
                 # Orukeet counted from the start of the part it was given.
                 part = (

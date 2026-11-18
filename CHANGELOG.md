@@ -25,12 +25,19 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
   and corresponding source archives. No separate Homebrew/server setup is needed
   in packaged builds. Distribution licensing remains a release gate.
 
+### Added
+- Transcription: long Whisper cues are broken into readable blocks after
+  transcription - at sentence punctuation where one fits, otherwise at the
+  longest pause - with a hard cap on words per cue (default 6, adjustable in
+  Transcription Settings).
+
 ### Fixed
 - Timeline: a boundary shared by two touching captions can be dragged in
   Regular edit too. Whisper transcripts are contiguous, so every edge drag
   used to clamp to zero movement unless Rolling edit was on; a shared boundary
   now moves as a splice in either mode, growing one caption as the other
   shrinks.
+
 
 ## [v26.11.09.1] - 2026-11-09
 
