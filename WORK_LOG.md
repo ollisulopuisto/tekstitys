@@ -58,3 +58,38 @@ Review fixes (head 9ebb8bb findings, Devin agreed on the first two):
    same list apply_orphan_rules uses): the conjunction starts the next chunk.
 3. The max-words spin box has a test (default, 2-20 bounds, persistence).
 
+---
+
+# Sidebar tabs (feat/sidebar-tabs)
+
+Olli picked sketch D (2026-11-18, "d"): the guided flow as tabs across the
+top. The right column's stacked sections (header grid, caption table, word
+shift, position card, collapsible style card, thumbnail panel) could squeeze
+each other - the caption table most of all - and the mix made the app hard
+to learn.
+
+Build: a QTabBar + QStackedLayout replace the single column. Every widget
+keeps its name, signals, tooltips and accessible names; only placement
+changed:
+
+- 1 Transcribe: Transcribe button, backend/style combos, Orukeet settings,
+  Fix Syllables, Group Words, Finnish proofreading.
+- 2 Edit (home tab): the caption table at full panel height, Adjust words
+  row, Add / Fix Orphans / Save.
+- 3 Style: preset, font, size, colours and checkboxes; the old collapsible
+  toggle is gone (the tab is the collapse). Badge: current preset.
+- 4 Position: Auto Dodge, Top/Mid/Bot, Apply to All, anchor slider, safe
+  zones. Badge: current anchor %.
+- 5 Thumbnail: the thumbnail panel moved here from the column bottom
+  (main_window hands it to caption_panel.add_thumbnail_tab).
+
+The strip between tab bar and pages stays visible in every tab: selected
+caption timing, and proofreading counts by category (red spelling, amber
+grammar, blue style) when the proofreader has results. It refreshes on
+selection, playhead and proofreader changes.
+
+Tests: the collapsible-toggle test was replaced by tab tests - five tabs and
+their order, Edit as home, only the current page visible, strip content in
+every tab, proofreading counts, badge values. Verified visually with
+offscreen grabs of all five tabs at 1280x800. macOS GUI not run locally.
+

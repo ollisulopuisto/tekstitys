@@ -83,26 +83,76 @@ def test_caption_panel_style_selection(qtbot):
     assert current_style.template_id == "karaoke"
 
 
-def test_caption_panel_style_collapsible(qtbot):
+def test_caption_panel_guided_tabs(qtbot):
+    panel = CaptionPanelWidget()
+    qtbot.addWidget(panel)
+
+    assert panel.tab_bar.count() == 5
+    assert panel.tab_bar.tabText(0).startswith("1 Transcribe")
+    assert panel.tab_bar.tabText(1).startswith("2 Edit")
+    assert panel.tab_bar.tabText(2).startswith("3 Style")
+    assert panel.tab_bar.tabText(3).startswith("4 Position")
+    assert panel.tab_bar.tabText(4).startswith("5 Thumbnail")
+    # Edit is the home tab: a transcript is edited more often than made.
+    assert panel.tab_bar.currentIndex() == 1
+
+
+def test_only_the_current_tab_page_is_visible(qtbot):
     panel = CaptionPanelWidget()
     qtbot.addWidget(panel)
     panel.show()
 
-    # Style content should be collapsed by default
-    assert hasattr(panel, "btn_toggle_style")
-    assert hasattr(panel, "style_content")
+    panel.tab_bar.setCurrentIndex(1)
+    assert panel.cue_table.isVisible()
     assert not panel.style_content.isVisible()
-    assert "▶" in panel.btn_toggle_style.text()
 
-    # Click toggle to expand
-    panel.btn_toggle_style.click()
+    panel.tab_bar.setCurrentIndex(2)
+    assert not panel.cue_table.isVisible()
     assert panel.style_content.isVisible()
-    assert "▼" in panel.btn_toggle_style.text()
 
-    # Click toggle to collapse again
-    panel.btn_toggle_style.click()
-    assert not panel.style_content.isVisible()
-    assert "▶" in panel.btn_toggle_style.text()
+
+def test_strip_shows_the_selected_caption_in_every_tab(qtbot):
+    panel = CaptionPanelWidget()
+    qtbot.addWidget(panel)
+    panel.show()
+
+    assert "No caption selected" in panel.strip_label.text()
+
+    panel.set_segments([CaptionSegment(start_ms=5100, end_ms=8200, text="Moikka")])
+    panel.cue_table.selectRow(0)
+    assert "Selected: 00:05.100" in panel.strip_label.text()
+    assert "00:08.200" in panel.strip_label.text()
+
+    # The strip lives outside the tab pages, so it survives a tab switch.
+    panel.tab_bar.setCurrentIndex(2)
+    assert "Selected: 00:05.100" in panel.strip_label.text()
+
+
+def test_strip_counts_proofreading_hits(qtbot):
+    from types import SimpleNamespace
+
+    panel = CaptionPanelWidget()
+    qtbot.addWidget(panel)
+
+    panel.proofreader.rows = (
+        (SimpleNamespace(category="spelling"),),
+        (SimpleNamespace(category="grammar"), SimpleNamespace(category="grammar")),
+    )
+    panel._update_strip()
+    text = panel.strip_label.text()
+    assert "1 spelling" in text
+    assert "2 grammar" in text
+
+
+def test_tab_badges_show_current_values(qtbot):
+    panel = CaptionPanelWidget()
+    qtbot.addWidget(panel)
+
+    assert "Oneliner" in panel.tab_bar.tabText(2)
+    assert "75%" in panel.tab_bar.tabText(3)
+
+    panel.set_anchor_pct(15.0)
+    assert "15%" in panel.tab_bar.tabText(3)
 
 
 def test_caption_panel_edit_cell_syncs_segment(qtbot):

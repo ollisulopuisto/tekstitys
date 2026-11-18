@@ -571,7 +571,7 @@ class MainWindow(QMainWindow):
         )
         self.thumbnail_panel.save_requested.connect(self._save_thumbnail)
         self.thumbnail_panel.set_style(self.project.style)
-        right_col.addWidget(self.thumbnail_panel)
+        self.caption_panel.add_thumbnail_tab(self.thumbnail_panel)
 
         # Internal labels retained for telemetry & unit tests without cluttering UI
         # Parented and hidden: parentless top-level labels get destroyed by the
@@ -697,6 +697,9 @@ class MainWindow(QMainWindow):
             QSlider::handle:horizontal { background: #ffffff; width: 14px; margin: -4px 0; border-radius: 7px; }
             QStatusBar { background-color: #18181b; border-top: 1px solid #27272a; color: #a1a1aa; }
             QSplitter::handle { background-color: #27272a; }
+            QTabBar::tab { background: #18181b; color: #a1a1aa; padding: 7px 10px; border-top-left-radius: 6px; border-top-right-radius: 6px; font-weight: 600; margin-right: 2px; }
+            QTabBar::tab:selected { background: #4f46e5; color: #ffffff; }
+            QTabBar::tab:hover:!selected { background: #27272a; color: #e4e4e7; }
         """)
 
     def _setup_perf_timer(self) -> None:
