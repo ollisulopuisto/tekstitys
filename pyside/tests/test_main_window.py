@@ -187,14 +187,14 @@ def test_main_window_clean_sidebar_layout(qtbot):
     layout = right_widget.layout()
     assert layout is not None
 
-    # The sidebar holds the caption panel and, below it, the thumbnail panel
-    # (its title field and preview sit beside the captions)
+    # The sidebar holds the caption panel; the thumbnail panel lives in the
+    # panel's own Thumbnail tab, not in the sidebar layout.
     layout_widgets = [
         layout.itemAt(i).widget()
         for i in range(layout.count())
         if layout.itemAt(i).widget() is not None
     ]
-    assert layout_widgets == [window.caption_panel, window.thumbnail_panel]
+    assert layout_widgets == [window.caption_panel]
 
     # Check that style section in caption panel starts collapsed
     assert not window.caption_panel.style_content.isVisible()
@@ -1298,11 +1298,9 @@ def test_a_transcribed_range_lands_in_place_among_the_existing_cues(
     window.close()
 
 
-def test_the_sidebar_takes_three_parts_to_the_preview_columns_two(qtbot):
-    """Oikea sivupalkki on 3 osaa, vasen (esikatselu ja aikajana) 2 osaa.
-
-    Kapea sivupalkki ei näytä kaikkea tekstiä, joten se saa enemmän tilaa.
-    """
+def test_the_sidebar_stops_at_its_designed_width_on_wide_windows(qtbot):
+    """Leveällä ikkunalla sivupalkki pysähtyy suunniteltuun leveyteensä ja
+    esikatselu saa loput; sen yli menevä leveys ei enää levitä kontrolleja."""
     window = MainWindow()
     qtbot.addWidget(window)
     window.show()
@@ -1311,11 +1309,11 @@ def test_the_sidebar_takes_three_parts_to_the_preview_columns_two(qtbot):
     while not isinstance(column.parentWidget(), QSplitter):
         column = column.parentWidget()
     splitter = column.parentWidget()
-    left, right = splitter.sizes()
 
-    # The preview column's minimum width follows the font metrics: 1.46 here and
-    # 1.42 on the macOS runner, so the band is wide enough for both.
-    assert 1.3 <= right / left <= 1.7
+    window.resize(1920, 1080)
+    left, right = splitter.sizes()
+    assert right <= 560
+    assert left > right
     window.close()
 
 
