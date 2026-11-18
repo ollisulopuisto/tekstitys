@@ -356,6 +356,107 @@ def group_words_into_phrases(
     ]
 
 
+DEFAULT_MAX_CAPTION_WORDS = 6
+
+
+def _word_spans_for_chunking(seg: CaptionSegment) -> list[WordSpan]:
+    """The cue's words, synthesizing even spans from the text when untimed."""
+    words = [w for w in (seg.words or []) if w.text.strip()]
+    if words:
+        return words
+    tokens = seg.text.split()
+    if not tokens:
+        return []
+    step = max(1, (seg.end_ms - seg.start_ms) // len(tokens))
+    return [
+        WordSpan(
+            start_ms=seg.start_ms + i * step,
+            end_ms=seg.end_ms
+            if i == len(tokens) - 1
+            else seg.start_ms + (i + 1) * step,
+            text=tok,
+        )
+        for i, tok in enumerate(tokens)
+    ]
+
+
+def _choose_chunk_cut(words: list[WordSpan], max_words: int) -> int:
+    """Where to cut a cue that is too long: sentence end, else the longest pause.
+
+    Cuts run 1..max_words, so the pause right after the word at the cap is a
+    candidate too. A cut never lands after a Finnish orphan word (ja, tai,
+    ...): the conjunction starts the next chunk, matching apply_orphan_rules.
+    """
+
+    def orphan_end(i: int) -> bool:
+        clean = words[i - 1].text.strip().strip(".,!?:;-\"'\u201d\u201c\u2019").lower()
+        return clean in FINNISH_ORPHAN_WORDS
+
+    for i in range(max_words, 0, -1):
+        if not orphan_end(i) and words[i - 1].text.rstrip().endswith(SENTENCE_ENDINGS):
+            return i
+    # No punctuation to break at: the longest pause is the least bad cut.
+    # Ties favour the latest cut, so even spacing fills the cap.
+    best_cut = 0
+    best_gap = 0
+    for i in range(1, max_words + 1):
+        if orphan_end(i):
+            continue
+        gap = words[i].start_ms - words[i - 1].end_ms
+        if gap > 0 and gap >= best_gap:
+            best_gap, best_cut = gap, i
+    if best_cut:
+        return best_cut
+    # No pause inside the cap: take the largest cut that does not strand an
+    # orphan, and only give up on that if every candidate would.
+    for i in range(max_words, 0, -1):
+        if not orphan_end(i):
+            return i
+    return max_words
+
+
+def chunk_long_segments(
+    segments: list[CaptionSegment],
+    max_words: int = DEFAULT_MAX_CAPTION_WORDS,
+) -> list[CaptionSegment]:
+    """Split cues longer than max_words at sentence ends, then pauses.
+
+    Whisper cues often run a whole sentence or more. Shorter cues are easier
+    to time, dodge and style, so long ones are broken up: at sentence-ending
+    punctuation when one falls inside the cap, otherwise at the longest pause
+    between words, and never past max_words. Words without timings get even
+    spans first, so every chunk keeps its place in the audio.
+    """
+    max_words = max(1, int(max_words))
+    chunked: list[CaptionSegment] = []
+    for seg in segments:
+        words = _word_spans_for_chunking(seg)
+        if len(words) <= max_words:
+            chunked.append(seg)
+            continue
+        while len(words) > max_words:
+            cut = _choose_chunk_cut(words, max_words)
+            head, words = words[:cut], words[cut:]
+            chunked.append(
+                CaptionSegment(
+                    start_ms=head[0].start_ms,
+                    end_ms=head[-1].end_ms,
+                    text=" ".join(w.text.strip() for w in head),
+                    words=list(head),
+                )
+            )
+        chunked.append(
+            CaptionSegment(
+                start_ms=words[0].start_ms,
+                end_ms=words[-1].end_ms,
+                text=" ".join(w.text.strip() for w in words),
+                words=list(words),
+                break_after=seg.break_after,
+            )
+        )
+    return chunked
+
+
 def delete_segment(segments: list[CaptionSegment], index: int) -> None:
     """Remove a cue and hand its time to the previous one.
 

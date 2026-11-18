@@ -9,11 +9,13 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QLabel,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 from app.core_client import CoreClient
+from app.models.captions import DEFAULT_MAX_CAPTION_WORDS
 
 
 class OrukeetSettingsDialog(QDialog):
@@ -48,6 +50,24 @@ class OrukeetSettingsDialog(QDialog):
         )
         self.whisper_model.currentTextChanged.connect(self._check_whisper)
         layout.addWidget(self.whisper_model)
+        layout.addWidget(QLabel("Max words per caption:"))
+        self.max_caption_words = QSpinBox()
+        self.max_caption_words.setRange(2, 20)
+        self.max_caption_words.setValue(
+            int(
+                QSettings().value(
+                    "transcription/max_caption_words",
+                    DEFAULT_MAX_CAPTION_WORDS,
+                    type=int,
+                )
+            )
+        )
+        self.max_caption_words.valueChanged.connect(
+            lambda value: QSettings().setValue(
+                "transcription/max_caption_words", int(value)
+            )
+        )
+        layout.addWidget(self.max_caption_words)
         self.whisper_status = QLabel("Checking Whisper model…")
         self.whisper_status.setWordWrap(True)
         layout.addWidget(self.whisper_status)
