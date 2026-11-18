@@ -22,3 +22,7 @@ without it on Linux).
 
 Verified with offscreen window grabs at 760x700: before = one table row
 visible; after = five rows plus a scrollbar. macOS GUI tests not run locally.
+
+Follow-up in review: a QScrollArea's own minimum width is ~70 px, so the
+splitter could have crushed the sidebar horizontally. The scroll area now
+keeps a 320 px floor (the column's controls measure ~311 px).

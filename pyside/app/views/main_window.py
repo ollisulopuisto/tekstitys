@@ -606,6 +606,9 @@ class MainWindow(QMainWindow):
             lbl.hide()
 
         right_scroll.setWidget(right_widget)
+        # A scroll area's own minimum width is tiny (~70 px); without a floor
+        # the splitter could crush the sidebar's two-column controls.
+        right_scroll.setMinimumWidth(320)
         splitter.addWidget(right_scroll)
         # The sidebar gets three parts to the preview column's two: the caption
         # list and its controls need the room more than the 9:16 preview does.
