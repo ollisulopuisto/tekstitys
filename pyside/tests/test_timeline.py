@@ -527,3 +527,53 @@ def test_drag_retime_refreshes_segment_flags(qapp):
     widget._refresh_segment_flags()
     assert widget._segments_sorted is False
     assert widget._segments_non_overlapping is False
+
+
+def test_a_tall_timeline_splits_neighbouring_captions_into_two_lanes(qtbot):
+    timeline = VisualTimelineWidget()
+    qtbot.addWidget(timeline)
+    timeline.setFixedHeight(140)
+    timeline.resize(800, 140)
+    segments = [
+        CaptionSegment(start_ms=i * 3000, end_ms=i * 3000 + 2500, text=f"Cue {i}")
+        for i in range(4)
+    ]
+    timeline.set_segments(segments)
+
+    assert timeline._lane_count() == 2
+    assert [timeline._lane_of(seg) for seg in segments] == [0, 1, 0, 1]
+    top0, height0 = timeline._lane_span(0)
+    top1, _ = timeline._lane_span(1)
+    assert top1 > top0 + height0  # the second lane sits below the first
+
+
+def test_a_short_timeline_stays_a_single_lane(qtbot):
+    timeline = VisualTimelineWidget()
+    qtbot.addWidget(timeline)
+    # The default 84 px track has no room for two lanes.
+    assert timeline._lane_count() == 1
+    seg = CaptionSegment(start_ms=0, end_ms=1000, text="Only lane")
+    timeline.set_segments([seg])
+    assert timeline._lane_of(seg) == 0
+
+
+def test_cue_hit_testing_respects_the_lanes(qtbot):
+    timeline = VisualTimelineWidget()
+    qtbot.addWidget(timeline)
+    timeline.setFixedHeight(140)
+    timeline.resize(800, 140)
+    first = CaptionSegment(start_ms=0, end_ms=2500, text="Top lane")
+    second = CaptionSegment(start_ms=3000, end_ms=5500, text="Bottom lane")
+    timeline.set_duration(8000)
+    timeline.set_segments([first, second])
+
+    lane0_mid = timeline._lane_span(0)[0] + 5
+    lane1_mid = timeline._lane_span(1)[0] + 5
+    x_first = timeline._ms_to_x(1250)
+    x_second = timeline._ms_to_x(4250)
+
+    assert timeline._cue_at(x_first, lane0_mid) == (first, "move")
+    assert timeline._cue_at(x_second, lane1_mid) == (second, "move")
+    # The same x on the other lane must not hit the cue.
+    assert timeline._cue_at(x_first, lane1_mid) is None
+    assert timeline._cue_at(x_second, lane0_mid) is None

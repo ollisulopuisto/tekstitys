@@ -360,7 +360,7 @@ class MainWindow(QMainWindow):
     def _setup_ui(self) -> None:
         central = QWidget(self)
         self.setCentralWidget(central)
-        root_layout = QHBoxLayout(central)
+        root_layout = QVBoxLayout(central)
         root_layout.setContentsMargins(8, 8, 8, 8)
         root_layout.setSpacing(8)
 
@@ -530,11 +530,12 @@ class MainWindow(QMainWindow):
         self.overlay = self.player.overlay
         left_col.addWidget(self.player, stretch=1)
 
-        # Visual Timeline Widget, with its edit tools and zoom above it
+        # Visual Timeline Widget, with its edit tools and zoom above it.
+        # It docks full width below the splitter, so a wide window gives the
+        # captions more room instead of widening the sidebar past its design.
         self.timeline = VisualTimelineWidget(self)
         self.timeline_scroll = TimelineScroll(self.timeline, self)
-        left_col.addWidget(self.timeline_scroll)
-        left_col.addLayout(self._build_timeline_toolbar())
+        self.timeline_scroll.set_track_height(140)
 
         splitter.addWidget(left_widget)
 
@@ -585,12 +586,23 @@ class MainWindow(QMainWindow):
             lbl.hide()
 
         splitter.addWidget(right_widget)
+        # On a wide window the sidebar stops at its designed width and the
+        # preview column takes the rest; past that, controls only spread out.
+        right_widget.setMaximumWidth(560)
         # The sidebar gets three parts to the preview column's two: the caption
         # list and its controls need the room more than the 9:16 preview does.
         splitter.setStretchFactor(0, 2)
         splitter.setStretchFactor(1, 3)
         splitter.setSizes([420, 630])
-        root_layout.addWidget(splitter)
+        root_layout.addWidget(splitter, stretch=1)
+
+        # Full-width timeline dock under both columns.
+        timeline_dock = QVBoxLayout()
+        timeline_dock.setContentsMargins(0, 0, 0, 0)
+        timeline_dock.setSpacing(4)
+        timeline_dock.addLayout(self._build_timeline_toolbar())
+        timeline_dock.addWidget(self.timeline_scroll)
+        root_layout.addLayout(timeline_dock)
 
         # Status Bar
         self.status = QStatusBar()

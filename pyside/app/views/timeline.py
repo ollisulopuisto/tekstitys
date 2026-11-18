@@ -24,6 +24,10 @@ from app.models.captions import (
 
 # Caption blocks start below the time ruler.
 _TRACK_TOP = 24
+# A track at least this tall splits into two lanes; neighbouring captions
+# alternate lanes so a tall, full-width timeline shows more of each cue.
+_LANE_MIN_H = 40
+_LANE_GAP = 4
 # A press this close to a block's edge takes hold of that edge, not the body.
 _CUE_EDGE_PX = 6
 # Less movement than this is a click, not a drag.
@@ -263,6 +267,34 @@ class VisualTimelineWidget(QWidget):
         pct = max(0.0, min(1.0, x / max(1, self.width() - 1)))
         return int(pct * self.duration_ms)
 
+
+    def _lane_count(self) -> int:
+        """Two lanes when the track is tall enough, one otherwise."""
+        track_h = self.height() - _TRACK_TOP - 4
+        return 2 if track_h >= 2 * _LANE_MIN_H + _LANE_GAP else 1
+
+    def _lane_of(self, seg: CaptionSegment) -> int:
+        """Neighbouring captions alternate lanes; anything unknown sits on top."""
+        if self._lane_count() < 2:
+            return 0
+        index = self._index_of(seg)
+        return (index if index >= 0 else 0) % 2
+
+    def _lane_span(self, lane: int) -> tuple[float, float]:
+        """The (top, height) of one lane of the caption track."""
+        track_h = self.height() - _TRACK_TOP - 4
+        lanes = self._lane_count()
+        lane_h = (track_h - (lanes - 1) * _LANE_GAP) / lanes
+        return _TRACK_TOP + lane * (lane_h + _LANE_GAP), lane_h
+
+    def _lane_at(self, y: float) -> int | None:
+        """The lane under a y position, or None above the track / in the gap."""
+        for lane in range(self._lane_count()):
+            top, height = self._lane_span(lane)
+            if top <= y <= top + height:
+                return lane
+        return None
+
     def _trim_handle_at(self, x: float) -> str | None:
         if self.duration_ms <= 0:
             return None
@@ -277,7 +309,12 @@ class VisualTimelineWidget(QWidget):
         """The caption block under a point, and which part of it: an edge or the body."""
         if self.duration_ms <= 0 or y < _TRACK_TOP:
             return None
+        lane = self._lane_at(y)
+        if lane is None:
+            return None
         for seg in self.segments:
+            if self._lane_of(seg) != lane:
+                continue
             x_start = self._ms_to_x(seg.start_ms)
             x_end = x_start + max(6.0, self._ms_to_x(seg.end_ms) - x_start)
             if abs(x - x_start) <= _CUE_EDGE_PX:
@@ -665,9 +702,9 @@ class VisualTimelineWidget(QWidget):
     ) -> None:
         """One caption block, in the track below the ruler. The painter's font
         is already the cue font."""
-        # Caption track section (from y=24 to y=h-6)
-        track_y = _RULER_H + 4
-        track_h = self.height() - track_y - 4
+        # Caption track section (from y=24 to y=h-6), split into lanes
+        # when the track is tall.
+        track_y, track_h = self._lane_span(self._lane_of(seg))
         x_start = self._ms_to_x(seg.start_ms)
         x_end = self._ms_to_x(seg.end_ms)
         seg_w = max(6.0, x_end - x_start)
@@ -707,6 +744,13 @@ class TimelineScroll(QScrollArea):
             timeline.height() + self.horizontalScrollBar().sizeHint().height()
         )
         timeline.zoom_requested.connect(self.zoom_by)
+
+    def set_track_height(self, height: int) -> None:
+        """Resize the timeline, and this scroll area around it, to `height` px."""
+        self.timeline.setFixedHeight(height)
+        self.setFixedHeight(
+            height + self.horizontalScrollBar().sizeHint().height()
+        )
 
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)

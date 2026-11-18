@@ -7,6 +7,13 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 
 ## [Unreleased]
 
+### Changed
+- Wide-screen layout: the sidebar stops at 560 px so the video preview takes
+  the extra width, and the timeline docks full width under both columns.
+  A tall timeline splits into two lanes, neighbouring captions alternating,
+  so more of each cue stays readable.
+
+
 ### Added
 - Captions-only alpha export: `tekstitys render-alpha` (CLI), the `renderAlpha`
   core method, and `CapSlapSession.render_alpha` (Python API) render a caption

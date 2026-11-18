@@ -1447,3 +1447,45 @@ def test_transcription_from_previous_source_cannot_replace_current_cues(
     assert not applied
     assert [s.text for s in window.caption_panel.segments] == ["current source"]
     window.close()
+
+
+def test_timeline_docks_full_width_and_the_sidebar_is_capped(qtbot):
+    """Wide-screen layout: the timeline spans the window under both columns,
+    and the sidebar stops growing at its designed width so the video grows."""
+    from PySide6.QtCore import QObject, Signal
+
+    class MockCore(QObject):
+        progress = Signal(str, str, float)
+
+        def call(self, method, params=None):
+            raise RuntimeError("no calls expected")
+
+        def close(self):
+            pass
+
+    window = MainWindow(core_client=MockCore())
+    qtbot.addWidget(window)
+
+    from PySide6.QtWidgets import QSplitter
+
+    central = window.centralWidget()
+    splitter = window.findChild(QSplitter)
+    assert splitter is not None
+
+    # The timeline no longer lives in the splitter's left column; it docks
+    # under the splitter so it spans the whole window.
+    left_widget = splitter.widget(0)
+    ancestor = window.player.parentWidget()
+    while ancestor is not None and ancestor is not left_widget:
+        ancestor = ancestor.parentWidget()
+    assert ancestor is left_widget  # sanity: the player is in the left column
+    ancestor = window.timeline_scroll.parentWidget()
+    while ancestor is not None and ancestor is not left_widget:
+        ancestor = ancestor.parentWidget()
+    assert ancestor is not left_widget
+    assert window.timeline_scroll.parentWidget() is central
+
+    # The sidebar is capped: extra width goes to the video, not the controls.
+    sidebar = window.caption_panel.parentWidget()
+    assert sidebar.maximumWidth() == 560
+    window.close()
