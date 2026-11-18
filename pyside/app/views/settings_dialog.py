@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core_client import CoreClient
+from app.models.captions import DEFAULT_MAX_CAPTION_WORDS
 
 
 class OrukeetSettingsDialog(QDialog):
@@ -53,7 +54,13 @@ class OrukeetSettingsDialog(QDialog):
         self.max_caption_words = QSpinBox()
         self.max_caption_words.setRange(2, 20)
         self.max_caption_words.setValue(
-            int(QSettings().value("transcription/max_caption_words", 6, type=int))
+            int(
+                QSettings().value(
+                    "transcription/max_caption_words",
+                    DEFAULT_MAX_CAPTION_WORDS,
+                    type=int,
+                )
+            )
         )
         self.max_caption_words.valueChanged.connect(
             lambda value: QSettings().setValue(
