@@ -1489,3 +1489,41 @@ def test_timeline_docks_full_width_and_the_sidebar_is_capped(qtbot):
     sidebar = window.caption_panel.parentWidget()
     assert sidebar.maximumWidth() == 560
     window.close()
+
+
+def test_action_bar_is_one_row_when_wide_and_wraps_when_narrow(qtbot):
+    """The action tiles keep together in one row on a wide window instead of
+    spreading across it, and wrap onto more rows only when narrow."""
+    from PySide6.QtCore import QObject, Signal
+
+    class MockCore(QObject):
+        progress = Signal(str, str, float)
+
+        def call(self, method, params=None):
+            raise RuntimeError("no calls expected")
+
+        def close(self):
+            pass
+
+    window = MainWindow(core_client=MockCore())
+    qtbot.addWidget(window)
+
+    window.resize(1920, 1080)
+    window.show()
+    qtbot.wait(50)
+    def visible_ys() -> set[int]:
+        ys = set()
+        for i in range(window.action_bar.count()):
+            widget = window.action_bar.itemAt(i).widget()
+            if widget is not None and widget.isVisible():
+                ys.add(widget.y())
+        return ys
+
+    ys_wide = visible_ys()
+    assert len(ys_wide) == 1, f"wide window spread the action bar: {ys_wide}"
+
+    window.resize(760, 700)
+    qtbot.wait(50)
+    ys_narrow = visible_ys()
+    assert len(ys_narrow) > 1, "narrow window should wrap the action bar"
+    window.close()

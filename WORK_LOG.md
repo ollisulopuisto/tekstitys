@@ -119,3 +119,8 @@ Tests: lane split, single-lane fallback, lane-aware hit testing
 (test_main_window.py, MockCore). Verified visually with an offscreen grab
 at 1920x1080: sidebar capped, preview wide, two-lane timeline across the
 bottom. macOS GUI not run locally.
+Review follow-up (Olli, 2026-11-18): the action tiles spread across the wide
+left column in a 3-column grid. The action bar is now the existing
+FlowLayout - one compact row when the column is wide, wrapping onto more
+rows only when narrow. Crop combo moved after proofreading so the
+B-roll/Export/proof group stays together.
