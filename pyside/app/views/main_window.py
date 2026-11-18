@@ -85,6 +85,9 @@ from app.views.video_canvas import SAFE_PLATFORMS
 from app.views.video_player import VideoPlayerWidget
 
 
+# The window's dark background; every stylesheet that paints it shares this.
+WINDOW_BACKGROUND = "#0f0f11"
+
 # What the export format dropdown offers, and the aspect each one asks the
 # renderer for. "Source" keeps the video's own frame.
 EXPORT_FORMATS: list[tuple[str, str]] = [
@@ -547,7 +550,7 @@ class MainWindow(QMainWindow):
         # The viewport fills its own background (palette Base, light); let
         # the window's dark show through instead.
         right_scroll.setStyleSheet(
-            "QScrollArea { background-color: #0f0f11; border: none; }"
+            f"QScrollArea {{ background-color: {WINDOW_BACKGROUND}; border: none; }}"
         )
         right_scroll.viewport().setAutoFillBackground(False)
         right_widget = QWidget()
@@ -555,7 +558,7 @@ class MainWindow(QMainWindow):
         # Plain QWidgets do not paint their palette background; inside the
         # scroll area the light viewport would show through the gaps.
         right_widget.setStyleSheet(
-            "QWidget#right_sidebar { background-color: #0f0f11; }"
+            f"QWidget#right_sidebar {{ background-color: {WINDOW_BACKGROUND}; }}"
         )
         right_col = QVBoxLayout(right_widget)
         right_col.setContentsMargins(4, 4, 4, 4)
@@ -704,8 +707,9 @@ class MainWindow(QMainWindow):
         self.core.progress.connect(self._on_core_progress)
 
     def _setup_dark_theme(self) -> None:
-        self.setStyleSheet("""
-            QMainWindow { background-color: #0f0f11; color: #f4f4f5; }
+        self.setStyleSheet(
+            f"QMainWindow {{ background-color: {WINDOW_BACKGROUND}; color: #f4f4f5; }}"
+            """
             QDialog, QMessageBox { background-color: #18181b; color: #f4f4f5; }
             QDialog QLabel, QMessageBox QLabel { color: #f4f4f5; background: transparent; }
             QDialog QComboBox, QDialog QLineEdit { background-color: #27272a; color: #f4f4f5; border: 1px solid #52525b; padding: 4px; }
@@ -722,7 +726,8 @@ class MainWindow(QMainWindow):
             QSlider::handle:horizontal { background: #ffffff; width: 14px; margin: -4px 0; border-radius: 7px; }
             QStatusBar { background-color: #18181b; border-top: 1px solid #27272a; color: #a1a1aa; }
             QSplitter::handle { background-color: #27272a; }
-        """)
+        """
+        )
 
     def _setup_perf_timer(self) -> None:
         self.perf_timer = QTimer(self)

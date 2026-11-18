@@ -26,3 +26,6 @@ visible; after = five rows plus a scrollbar. macOS GUI tests not run locally.
 Follow-up in review: a QScrollArea's own minimum width is ~70 px, so the
 splitter could have crushed the sidebar horizontally. The scroll area now
 keeps a 320 px floor (the column's controls measure ~311 px).
+
+Review fix: the sidebar background now shares the window's theme colour via a
+WINDOW_BACKGROUND constant instead of a second hardcoded #0f0f11.
