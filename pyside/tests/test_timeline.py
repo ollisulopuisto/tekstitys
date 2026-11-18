@@ -301,14 +301,41 @@ def test_rolling_edit_moves_the_splice_and_both_captions_follow(qtbot):
     assert {id(s) for s in retimed} == {id(seg1), id(seg2)}
 
 
-def test_regular_edit_changes_only_the_caption_whose_edge_is_dragged(qtbot):
+def test_regular_edit_shared_boundary_moves_the_splice(qtbot):
+    """A boundary shared by two touching captions is a splice in either mode.
+
+    Whisper transcripts are contiguous, so in regular edit every drag used to
+    clamp to zero movement: the caption cannot extend into its neighbour and
+    the neighbour refuses to move. Dragging a shared boundary now moves it,
+    growing one caption as the other shrinks.
+    """
     timeline, seg1, seg2 = _touching_timeline(qtbot)
     timeline.set_edit_mode("regular")
+    retimed = []
+    timeline.cue_retimed.connect(retimed.append)
 
-    _drag(qtbot, timeline, 300, 200)
+    # The shared boundary sits at x = 300. Drag it about 1 s to the right.
+    _drag(qtbot, timeline, 300, 400)
 
-    assert seg1.end_ms < 2500
-    assert (seg2.start_ms, seg2.end_ms) == (3000, 8000)
+    assert seg1.end_ms == seg2.start_ms
+    assert seg1.end_ms > 3500
+    assert seg1.start_ms == 1000
+    assert seg2.end_ms == 8000
+    assert {id(s) for s in retimed} == {id(seg1), id(seg2)}
+
+
+def test_regular_edit_edge_across_a_gap_changes_only_the_dragged_caption(qtbot):
+    """With free space beside the caption, regular edit moves only its edge."""
+    timeline, seg1, seg2 = _cue_timeline(qtbot)
+    timeline.set_edit_mode("regular")
+
+    # seg2 starts at x = 500, with a gap to seg1 (ends at x = 300). Drag the
+    # start edge 1 s left, into the gap.
+    _drag(qtbot, timeline, 500, 400)
+
+    assert abs(seg2.start_ms - 4000) <= 20
+    assert seg2.end_ms == 8000
+    assert (seg1.start_ms, seg1.end_ms) == (1000, 3000)
 
 
 def test_zoom_widens_the_timeline_and_is_limited(qtbot):

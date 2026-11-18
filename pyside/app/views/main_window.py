@@ -1980,7 +1980,8 @@ class MainWindow(QMainWindow):
             (
                 "regular",
                 "Regular edit",
-                "Drag a caption's edge: only that caption changes length",
+                "Drag a caption's edge to retime it; a boundary shared with "
+                "a neighbour moves both sides",
             ),
             (
                 "rolling",

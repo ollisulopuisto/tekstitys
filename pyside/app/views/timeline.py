@@ -347,8 +347,14 @@ class VisualTimelineWidget(QWidget):
         self.update()
 
     def _roll_partner(self, seg: CaptionSegment, mode: str) -> CaptionSegment | None:
-        """The caption on the other side of an edge that is shared with it."""
-        if self.edit_mode != "rolling" or mode not in ("start", "end"):
+        """The caption on the other side of an edge that is shared with it.
+
+        A shared boundary is a splice in either edit mode: captions cannot
+        overlap, so dragging the boundary they touch has no other meaning.
+        Without this, a contiguous transcript (what Whisper produces) clamped
+        every regular-edit drag to zero movement and nothing could be retimed.
+        """
+        if mode not in ("start", "end"):
             return None
         idx = self._index_of(seg)
         if mode == "start" and idx > 0:

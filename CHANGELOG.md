@@ -25,6 +25,13 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
   and corresponding source archives. No separate Homebrew/server setup is needed
   in packaged builds. Distribution licensing remains a release gate.
 
+### Fixed
+- Timeline: a boundary shared by two touching captions can be dragged in
+  Regular edit too. Whisper transcripts are contiguous, so every edge drag
+  used to clamp to zero movement unless Rolling edit was on; a shared boundary
+  now moves as a splice in either mode, growing one caption as the other
+  shrinks.
+
 ## [v26.11.09.1] - 2026-11-09
 
 ### Fixed
