@@ -829,3 +829,42 @@ def test_strip_follows_retiming_of_the_selected_caption(qtbot):
     panel.segments[0].end_ms = 10000
     panel.cue_moved_on_timeline(panel.segments[0])
     assert "00:10.000" in panel.strip_label.text()
+
+
+def test_every_action_button_is_reachable_in_a_tab(qtbot):
+    """Every control the pre-tabs header had must live on some tab page.
+
+    A button that is created but never placed in a layout is invisible and
+    unreachable - this guards the tabs rebuild against orphaning a control.
+    """
+    panel = CaptionPanelWidget()
+    qtbot.addWidget(panel)
+    panel.show()
+
+    buttons = [
+        panel.btn_transcribe,
+        panel.btn_orukeet_settings,
+        panel.btn_add_cue,
+        panel.btn_autoplace,
+        panel.btn_combine_syllables,
+        panel.btn_group_words,
+        panel.btn_fix_orphans,
+        panel.btn_save,
+        panel.btn_mark_start,
+        panel.btn_mark_end,
+        panel.btn_shift_prev,
+        panel.btn_shift_next,
+        panel.btn_delete_empty,
+    ]
+    pages = {panel.tab_stack.widget(i) for i in range(panel.tab_stack.count())}
+    assert len(pages) == panel.tab_bar.count()
+    for button in buttons:
+        chain = []
+        ancestor = button.parentWidget()
+        while ancestor is not None:
+            chain.append(ancestor)
+            ancestor = ancestor.parentWidget()
+        home = next((page for page in pages if page in chain), None)
+        assert home is not None, f"{button.text()!r} is on no tab page"
+        panel.tab_bar.setCurrentIndex(panel.tab_stack.indexOf(home))
+        assert button.isVisible(), f"{button.text()!r} not visible on its tab"
