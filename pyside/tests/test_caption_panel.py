@@ -83,26 +83,76 @@ def test_caption_panel_style_selection(qtbot):
     assert current_style.template_id == "karaoke"
 
 
-def test_caption_panel_style_collapsible(qtbot):
+def test_caption_panel_guided_tabs(qtbot):
+    panel = CaptionPanelWidget()
+    qtbot.addWidget(panel)
+
+    assert panel.tab_bar.count() == 5
+    assert panel.tab_bar.tabText(0).startswith("1 Transcribe")
+    assert panel.tab_bar.tabText(1).startswith("2 Edit")
+    assert panel.tab_bar.tabText(2).startswith("3 Style")
+    assert panel.tab_bar.tabText(3).startswith("4 Position")
+    assert panel.tab_bar.tabText(4).startswith("5 Thumbnail")
+    # Edit is the home tab: a transcript is edited more often than made.
+    assert panel.tab_bar.currentIndex() == 1
+
+
+def test_only_the_current_tab_page_is_visible(qtbot):
     panel = CaptionPanelWidget()
     qtbot.addWidget(panel)
     panel.show()
 
-    # Style content should be collapsed by default
-    assert hasattr(panel, "btn_toggle_style")
-    assert hasattr(panel, "style_content")
+    panel.tab_bar.setCurrentIndex(1)
+    assert panel.cue_table.isVisible()
     assert not panel.style_content.isVisible()
-    assert "▶" in panel.btn_toggle_style.text()
 
-    # Click toggle to expand
-    panel.btn_toggle_style.click()
+    panel.tab_bar.setCurrentIndex(2)
+    assert not panel.cue_table.isVisible()
     assert panel.style_content.isVisible()
-    assert "▼" in panel.btn_toggle_style.text()
 
-    # Click toggle to collapse again
-    panel.btn_toggle_style.click()
-    assert not panel.style_content.isVisible()
-    assert "▶" in panel.btn_toggle_style.text()
+
+def test_strip_shows_the_selected_caption_in_every_tab(qtbot):
+    panel = CaptionPanelWidget()
+    qtbot.addWidget(panel)
+    panel.show()
+
+    assert "No caption selected" in panel.strip_label.text()
+
+    panel.set_segments([CaptionSegment(start_ms=5100, end_ms=8200, text="Moikka")])
+    panel.cue_table.selectRow(0)
+    assert "Selected: 00:05.100" in panel.strip_label.text()
+    assert "00:08.200" in panel.strip_label.text()
+
+    # The strip lives outside the tab pages, so it survives a tab switch.
+    panel.tab_bar.setCurrentIndex(2)
+    assert "Selected: 00:05.100" in panel.strip_label.text()
+
+
+def test_strip_counts_proofreading_hits(qtbot):
+    from types import SimpleNamespace
+
+    panel = CaptionPanelWidget()
+    qtbot.addWidget(panel)
+
+    panel.proofreader.rows = (
+        (SimpleNamespace(category="spelling"),),
+        (SimpleNamespace(category="grammar"), SimpleNamespace(category="grammar")),
+    )
+    panel._update_strip()
+    text = panel.strip_label.text()
+    assert "1 spelling" in text
+    assert "2 grammar" in text
+
+
+def test_tab_badges_show_current_values(qtbot):
+    panel = CaptionPanelWidget()
+    qtbot.addWidget(panel)
+
+    assert "Oneliner" in panel.tab_bar.tabText(2)
+    assert "75%" in panel.tab_bar.tabText(3)
+
+    panel.set_anchor_pct(15.0)
+    assert "15%" in panel.tab_bar.tabText(3)
 
 
 def test_caption_panel_edit_cell_syncs_segment(qtbot):
@@ -761,3 +811,60 @@ def test_proofreading_defaults_and_off_clear_results(qtbot):
     panel.proofreader.rows = ((Issue(3, 5, "Test", ("eivät",), "grammar"),),)
     panel.combo_proofreading.setCurrentIndex(0)
     assert panel.proofreading_for_row(0) == ()
+
+
+def test_strip_follows_retiming_of_the_selected_caption(qtbot):
+    panel = CaptionPanelWidget()
+    qtbot.addWidget(panel)
+    panel.set_segments([CaptionSegment(start_ms=5100, end_ms=8200, text="Moikka")])
+    panel.cue_table.selectRow(0)
+    assert "00:08.200" in panel.strip_label.text()
+
+    # A timecode edit in the table refreshes the strip...
+    panel._retime_segment(0, 5100, 9000)
+    assert "00:09.000" in panel.strip_label.text()
+
+    # ...and so does a timeline drag landing on the same cue object.
+    panel.cue_moved_on_timeline(panel.segments[0])
+    panel.segments[0].end_ms = 10000
+    panel.cue_moved_on_timeline(panel.segments[0])
+    assert "00:10.000" in panel.strip_label.text()
+
+
+def test_every_action_button_is_reachable_in_a_tab(qtbot):
+    """Every control the pre-tabs header had must live on some tab page.
+
+    A button that is created but never placed in a layout is invisible and
+    unreachable - this guards the tabs rebuild against orphaning a control.
+    """
+    panel = CaptionPanelWidget()
+    qtbot.addWidget(panel)
+    panel.show()
+
+    buttons = [
+        panel.btn_transcribe,
+        panel.btn_orukeet_settings,
+        panel.btn_add_cue,
+        panel.btn_autoplace,
+        panel.btn_combine_syllables,
+        panel.btn_group_words,
+        panel.btn_fix_orphans,
+        panel.btn_save,
+        panel.btn_mark_start,
+        panel.btn_mark_end,
+        panel.btn_shift_prev,
+        panel.btn_shift_next,
+        panel.btn_delete_empty,
+    ]
+    pages = {panel.tab_stack.widget(i) for i in range(panel.tab_stack.count())}
+    assert len(pages) == panel.tab_bar.count()
+    for button in buttons:
+        chain = []
+        ancestor = button.parentWidget()
+        while ancestor is not None:
+            chain.append(ancestor)
+            ancestor = ancestor.parentWidget()
+        home = next((page for page in pages if page in chain), None)
+        assert home is not None, f"{button.text()!r} is on no tab page"
+        panel.tab_bar.setCurrentIndex(panel.tab_stack.indexOf(home))
+        assert button.isVisible(), f"{button.text()!r} not visible on its tab"

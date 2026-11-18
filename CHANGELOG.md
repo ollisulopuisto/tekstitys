@@ -26,6 +26,12 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
   in packaged builds. Distribution licensing remains a release gate.
 
 ### Added
+- Sidebar: the right column is now a guided flow of five tabs - Transcribe,
+  Edit, Style, Position, Thumbnail - so no section can squeeze the caption
+  table. A strip under the tabs always shows the selected caption's timing
+  and the proofreading counts; the Style and Position tabs carry the current
+  preset and anchor as badges. The caption table gets the full panel height
+  in the Edit tab.
 - Transcription: long Whisper cues are broken into readable blocks after
   transcription - at sentence punctuation where one fits, otherwise at the
   longest pause - with a hard cap on words per cue (default 6, adjustable in

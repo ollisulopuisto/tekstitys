@@ -18,7 +18,9 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSlider,
+    QStackedLayout,
     QStyledItemDelegate,
+    QTabBar,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -208,15 +210,61 @@ class CaptionPanelWidget(QWidget):
         layout.setContentsMargins(8, 6, 8, 8)
         layout.setSpacing(6)
 
-        # Header with actions
+        # Guided flow as tabs across the top: one job per tab, so no section
+        # can squeeze the caption table out of its space. Every control below
+        # is built the same as before; only its placement changes - each
+        # section lives in the tab where its job happens.
+        self.tab_bar = QTabBar()
+        self.tab_bar.setExpanding(True)
+        self.tab_bar.setDrawBase(False)
+        self.tab_stack = QStackedLayout()
+        self.tab_bar.currentChanged.connect(self.tab_stack.setCurrentIndex)
+        for title in (
+            "1 Transcribe",
+            "2 Edit",
+            "3 Style",
+            "4 Position",
+            "5 Thumbnail",
+        ):
+            self.tab_bar.addTab(title)
+
+        # The strip under the tabs stays visible in every tab: which cue is
+        # selected, and how many proofreading hits the transcript has.
+        self.strip_label = QLabel()
+        self.strip_label.setTextFormat(Qt.TextFormat.RichText)
+        self.strip_label.setStyleSheet(
+            "background-color: #18181b; border-radius: 6px; padding: 5px 8px;"
+        )
+
+        layout.addWidget(self.tab_bar)
+        layout.addWidget(self.strip_label)
+        layout.addLayout(self.tab_stack, stretch=1)
+
+        page_transcribe = QWidget()
+        page_edit = QWidget()
+        page_style = QWidget()
+        page_position = QWidget()
+        self._page_thumbnail = QWidget()
+        for page in (
+            page_transcribe,
+            page_edit,
+            page_style,
+            page_position,
+            self._page_thumbnail,
+        ):
+            page_layout = QVBoxLayout(page)
+            page_layout.setContentsMargins(0, 6, 0, 0)
+            page_layout.setSpacing(6)
+            self.tab_stack.addWidget(page)
+
+        edit_page_layout = page_edit.layout()
+        position_page_layout = page_position.layout()
+        style_page_layout = page_style.layout()
+
+        # Transcribe tab: get the words out of the audio and clean them up.
         header_layout = QGridLayout()
         header_layout.setSpacing(4)
         self.header_layout = header_layout
-        self.lbl_title = QLabel("Captions")
-        self.lbl_title.setStyleSheet(
-            "font-weight: bold; font-size: 14px; color: #f4f4f5;"
-        )
-        header_layout.addWidget(self.lbl_title, 0, 0, 1, 3)
         self.combo_proofreading = QComboBox()
         for label, mode in (
             ("Off", "off"),
@@ -230,23 +278,22 @@ class CaptionPanelWidget(QWidget):
             "Local Finnish proofreading: red spelling, amber grammar, blue style. Suggestions only, never automatic changes."
         )
         self.combo_proofreading.currentIndexChanged.connect(self._request_proofreading)
-        header_layout.addWidget(QLabel("Finnish proofreading"), 5, 0)
-        header_layout.addWidget(self.combo_proofreading, 5, 1, 1, 2)
+        header_layout.addWidget(QLabel("Finnish proofreading"), 3, 0)
+        header_layout.addWidget(self.combo_proofreading, 3, 1, 1, 2)
         self.proofreading_status = QLabel()
         self.proofreading_status.setWordWrap(True)
-        header_layout.addWidget(self.proofreading_status, 6, 0, 1, 3)
+        header_layout.addWidget(self.proofreading_status, 4, 0, 1, 3)
 
         self.btn_add_cue = tile("Add", "plus", compact=True)
         self.btn_add_cue.setToolTip(
             "Add a new caption cue at the current playback position"
         )
         self.btn_add_cue.clicked.connect(self.add_cue_requested.emit)
-        header_layout.addWidget(self.btn_add_cue, 1, 0)
 
         self.btn_transcribe = tile("Transcribe", "mic", compact=True)
         self.btn_transcribe.setToolTip("Transcribe audio locally with Orukeet")
         self.btn_transcribe.clicked.connect(self.transcribe_requested.emit)
-        header_layout.addWidget(self.btn_transcribe, 1, 1)
+        header_layout.addWidget(self.btn_transcribe, 0, 0, 1, 3)
 
         self.combo_transcription_backend = QComboBox()
         self.combo_transcription_backend.addItem("Orukeet", "orukeet")
@@ -260,7 +307,7 @@ class CaptionPanelWidget(QWidget):
                 str(self.combo_transcription_backend.currentData())
             )
         )
-        header_layout.addWidget(self.combo_transcription_backend, 3, 0)
+        header_layout.addWidget(self.combo_transcription_backend, 1, 0)
 
         self.combo_transcription_style = QComboBox()
         self.combo_transcription_style.addItem("Verbatim", True)
@@ -270,28 +317,27 @@ class CaptionPanelWidget(QWidget):
             "for a cleaner transcript."
         )
         self.combo_transcription_style.setAccessibleName("Transcription style")
-        header_layout.addWidget(self.combo_transcription_style, 3, 2)
+        header_layout.addWidget(self.combo_transcription_style, 1, 2)
 
         self.btn_orukeet_settings = tile("Orukeet", "gear", compact=True)
         self.btn_orukeet_settings.setToolTip(
             "Install Orukeet or download the selected Whisper model"
         )
         self.btn_orukeet_settings.clicked.connect(self.orukeet_settings_requested.emit)
-        header_layout.addWidget(self.btn_orukeet_settings, 3, 1)
+        header_layout.addWidget(self.btn_orukeet_settings, 1, 1)
 
         self.btn_autoplace = tile("Auto Dodge", "wand", compact=True)
         self.btn_autoplace.setToolTip(
             "Analyze video frame activity and automatically dodge faces/busy areas"
         )
         self.btn_autoplace.clicked.connect(self.auto_place_requested.emit)
-        header_layout.addWidget(self.btn_autoplace, 2, 0)
 
         self.btn_combine_syllables = tile("Fix Syllables", "text", compact=True)
         self.btn_combine_syllables.setToolTip(
             "Combine separated syllables and fix broken words across segments"
         )
         self.btn_combine_syllables.clicked.connect(self._on_combine_syllables_clicked)
-        header_layout.addWidget(self.btn_combine_syllables, 2, 1)
+        header_layout.addWidget(self.btn_combine_syllables, 2, 0, 1, 2)
 
         self.btn_group_words = tile("Group Words", "grid", compact=True)
         self.btn_group_words.setToolTip(
@@ -307,12 +353,10 @@ class CaptionPanelWidget(QWidget):
             "Prevent trailing conjunctions ('tai', 'ja') and lone words after commas"
         )
         self.btn_fix_orphans.clicked.connect(self._on_fix_orphans_clicked)
-        header_layout.addWidget(self.btn_fix_orphans, 4, 0)
 
         self.btn_save = tile("Save", "save", compact=True)
         self.btn_save.setToolTip("Save captions to sidecar file (.capslap.json)")
         self.btn_save.clicked.connect(self.save_requested.emit)
-        header_layout.addWidget(self.btn_save, 1, 2)
 
         # Three equal columns: every button in a row lines up with the one above.
         for column in range(3):
@@ -327,7 +371,8 @@ class CaptionPanelWidget(QWidget):
             self.btn_save,
         ):
             button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        layout.addLayout(header_layout)
+        page_transcribe.layout().addLayout(header_layout)
+        page_transcribe.layout().addStretch(1)
 
         # Table of cues
         self.cue_table = QTableWidget(0, 4)
@@ -388,7 +433,8 @@ class CaptionPanelWidget(QWidget):
             "Right-click a word in the text to split the caption before it."
         )
         self.cue_table.installEventFilter(self)
-        layout.addWidget(self.cue_table, stretch=1)
+        # The Edit tab gives the table the full height of the panel.
+        edit_page_layout.addWidget(self.cue_table, stretch=1)
 
         # Row for word-level shifting
         row_shift = QGridLayout()
@@ -438,7 +484,16 @@ class CaptionPanelWidget(QWidget):
         self.btn_delete_empty.setEnabled(False)
         self.btn_delete_empty.clicked.connect(self._on_delete_empty_clicked)
         row_shift.addWidget(self.btn_delete_empty, 1, 2)
-        layout.addLayout(row_shift)
+        edit_page_layout.addLayout(row_shift)
+
+        edit_actions = QGridLayout()
+        edit_actions.setSpacing(4)
+        edit_actions.addWidget(self.btn_add_cue, 0, 0)
+        edit_actions.addWidget(self.btn_fix_orphans, 0, 1)
+        edit_actions.addWidget(self.btn_save, 0, 2)
+        for column in range(3):
+            edit_actions.setColumnStretch(column, 1)
+        edit_page_layout.addLayout(edit_actions)
 
         # Compact Position controls
         pos_container = QWidget()
@@ -544,9 +599,12 @@ class CaptionPanelWidget(QWidget):
         safe_row.addStretch()
         pos_layout.addLayout(safe_row)
 
-        layout.addWidget(pos_container)
+        position_page_layout.addWidget(self.btn_autoplace)
+        position_page_layout.addWidget(pos_container)
+        position_page_layout.addStretch(1)
 
-        # Collapsible Style & Typography section
+        # Style & Typography: its own tab now, so no collapsible - the
+        # content is always visible when the Style tab is open.
         style_container = QWidget()
         style_container.setStyleSheet(
             "background-color: #27272a; border-radius: 6px; padding: 4px;"
@@ -554,25 +612,6 @@ class CaptionPanelWidget(QWidget):
         style_layout = QVBoxLayout(style_container)
         style_layout.setContentsMargins(6, 4, 6, 6)
         style_layout.setSpacing(4)
-
-        self.btn_toggle_style = QPushButton("▶ Style & Typography")
-        self.btn_toggle_style.setCheckable(True)
-        self.btn_toggle_style.setChecked(False)
-        self.btn_toggle_style.setStyleSheet("""
-            QPushButton {
-                text-align: left;
-                font-weight: 600;
-                font-size: 12px;
-                color: #e4e4e7;
-                background: transparent;
-                border: none;
-                padding: 4px;
-            }
-            QPushButton:hover {
-                color: #ffffff;
-            }
-        """)
-        style_layout.addWidget(self.btn_toggle_style)
 
         self.style_content = QWidget()
         content_layout = QVBoxLayout(self.style_content)
@@ -697,21 +736,53 @@ class CaptionPanelWidget(QWidget):
         row_colors.addWidget(self.chk_glow)
         content_layout.addLayout(row_colors)
 
-        # Initially collapsed
-        self.style_content.setVisible(False)
-
-        def _on_style_toggle(checked: bool) -> None:
-            self.style_content.setVisible(checked)
-            self.btn_toggle_style.setText(
-                "▼ Style & Typography" if checked else "▶ Style & Typography"
-            )
-
-        self.btn_toggle_style.toggled.connect(_on_style_toggle)
-
         style_layout.addWidget(self.style_content)
         self._update_color_buttons()
         self._update_safe_button_styles()
-        layout.addWidget(style_container)
+        style_page_layout.addWidget(style_container)
+        style_page_layout.addStretch(1)
+
+        self._update_strip()
+        self._update_tab_badges()
+        # Edit is the home tab: a transcript is edited more often than made.
+        self.tab_bar.setCurrentIndex(1)
+
+    def add_thumbnail_tab(self, widget: QWidget) -> None:
+        """The thumbnail panel lives in the last tab of the guided flow."""
+        self._page_thumbnail.layout().addWidget(widget)
+
+    def _update_strip(self) -> None:
+        """Selected cue timing + proofreading counts, visible in every tab."""
+        seg = self.selected_segment or self.playhead_segment
+        if seg is not None:
+            selected = (
+                f"Selected: {format_timestamp(seg.start_ms)}"
+                f" \u2013 {format_timestamp(seg.end_ms)}"
+            )
+        else:
+            selected = "No caption selected"
+        counts: dict[str, int] = {}
+        for row in self.proofreader.rows:
+            for issue in row:
+                counts[issue.category] = counts.get(issue.category, 0) + 1
+        html = selected
+        colors = {"spelling": "#ef4444", "grammar": "#f59e0b", "style": "#3b82f6"}
+        for category in ("spelling", "grammar", "style"):
+            count = counts.get(category, 0)
+            if count:
+                html += (
+                    f' &nbsp; <span style="color:{colors[category]}">\u25cf</span>'
+                    f" {count} {category}"
+                )
+        self.strip_label.setText(html)
+
+    def _set_tab_badge(self, index: int, base: str, badge: str) -> None:
+        self.tab_bar.setTabText(index, f"{base} \u00b7 {badge}" if badge else base)
+
+    def _update_tab_badges(self) -> None:
+        """Value badges: the Style tab shows the preset, Position the anchor."""
+        self._set_tab_badge(2, "3 Style", self.combo_template.currentText().strip())
+        self._set_tab_badge(3, "4 Position", f"{self.active_anchor_pct:.0f}%")
 
     def _update_color_buttons(self) -> None:
         tc = self.current_style.text_color
@@ -747,6 +818,7 @@ class CaptionPanelWidget(QWidget):
             if idx >= 0:
                 self.combo_template.setCurrentIndex(idx)
         self.combo_template.blockSignals(False)
+        self._update_tab_badges()
 
     def _rebuild_font_menu(self) -> None:
         self.font_menu.clear()
@@ -796,6 +868,7 @@ class CaptionPanelWidget(QWidget):
             custom_preset = self.preset_manager.get_preset(tpl_id)
             if custom_preset:
                 self.set_style(custom_preset)
+        self._update_tab_badges()
 
     def _on_save_preset_clicked(self) -> None:
         name, ok = QInputDialog.getText(
@@ -912,6 +985,7 @@ class CaptionPanelWidget(QWidget):
         self._update_color_buttons()
 
         self._block_signals = False
+        self._update_tab_badges()
         self.style_changed.emit(self.current_style)
 
     def _on_combine_syllables_clicked(self) -> None:
@@ -966,6 +1040,7 @@ class CaptionPanelWidget(QWidget):
     def _proofreading_changed(self):
         self.proofreading_status.setText(self.proofreader.error)
         self.cue_table.viewport().update()
+        self._update_strip()
 
     def _invalidate_spell_cache(self, row=None):
         # Neighbours supply grammatical context, so an edit invalidates all
@@ -1173,6 +1248,7 @@ class CaptionPanelWidget(QWidget):
     ) -> None:
         self.selected_segment = segment
         self.set_anchor_pct(anchor_y_pct, user_action=False)
+        self._update_strip()
 
         if not segment:
             self.cue_table.clearSelection()
@@ -1192,6 +1268,7 @@ class CaptionPanelWidget(QWidget):
             return
         previous = self._row_for(self.playhead_segment)
         self.playhead_segment = segment
+        self._update_strip()
         current = self._row_for(segment)
         for row in {previous, current} - {-1}:
             for column in range(self.cue_table.columnCount()):
@@ -1225,6 +1302,8 @@ class CaptionPanelWidget(QWidget):
         self.slider_anchor.setValue(round(self.active_anchor_pct))
         self.slider_anchor.blockSignals(False)
 
+        self._update_tab_badges()
+
         if user_action and self.selected_segment:
             self.position_override_changed.emit(
                 self.selected_segment, self.active_anchor_pct
@@ -1252,6 +1331,7 @@ class CaptionPanelWidget(QWidget):
                 self.selected_segment = seg
                 self.btn_delete_empty.setEnabled(not seg.text.strip())
                 self.segment_selected.emit(seg)
+                self._update_strip()
                 return
         self.btn_delete_empty.setEnabled(False)
 
@@ -1304,6 +1384,7 @@ class CaptionPanelWidget(QWidget):
         start_ms, end_ms = clamped_segment_time(self.segments, row, start_ms, end_ms)
         set_segment_time(seg, start_ms, end_ms)
         self._refresh_time_cells(row)
+        self._update_strip()
         self.segment_updated.emit(seg)
         self.segments_updated.emit(self.segments)
 
@@ -1370,6 +1451,7 @@ class CaptionPanelWidget(QWidget):
         if row < 0:
             return
         self._refresh_time_cells(row)
+        self._update_strip()
         self.segment_updated.emit(seg)
         self.segments_updated.emit(self.segments)
 
