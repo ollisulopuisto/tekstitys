@@ -187,14 +187,14 @@ def test_main_window_clean_sidebar_layout(qtbot):
     layout = right_widget.layout()
     assert layout is not None
 
-    # The sidebar holds the caption panel and, below it, the thumbnail panel
-    # (its title field and preview sit beside the captions)
+    # The sidebar holds the caption panel; the thumbnail panel lives in the
+    # panel's own Thumbnail tab, not in the sidebar layout.
     layout_widgets = [
         layout.itemAt(i).widget()
         for i in range(layout.count())
         if layout.itemAt(i).widget() is not None
     ]
-    assert layout_widgets == [window.caption_panel, window.thumbnail_panel]
+    assert layout_widgets == [window.caption_panel]
 
     # Check that style section in caption panel starts collapsed
     assert not window.caption_panel.style_content.isVisible()
@@ -1298,11 +1298,9 @@ def test_a_transcribed_range_lands_in_place_among_the_existing_cues(
     window.close()
 
 
-def test_the_sidebar_takes_three_parts_to_the_preview_columns_two(qtbot):
-    """Oikea sivupalkki on 3 osaa, vasen (esikatselu ja aikajana) 2 osaa.
-
-    Kapea sivupalkki ei näytä kaikkea tekstiä, joten se saa enemmän tilaa.
-    """
+def test_the_sidebar_stops_at_its_designed_width_on_wide_windows(qtbot):
+    """Leveällä ikkunalla sivupalkki pysähtyy suunniteltuun leveyteensä ja
+    esikatselu saa loput; sen yli menevä leveys ei enää levitä kontrolleja."""
     window = MainWindow()
     qtbot.addWidget(window)
     window.show()
@@ -1311,11 +1309,11 @@ def test_the_sidebar_takes_three_parts_to_the_preview_columns_two(qtbot):
     while not isinstance(column.parentWidget(), QSplitter):
         column = column.parentWidget()
     splitter = column.parentWidget()
-    left, right = splitter.sizes()
 
-    # The preview column's minimum width follows the font metrics: 1.46 here and
-    # 1.42 on the macOS runner, so the band is wide enough for both.
-    assert 1.3 <= right / left <= 1.7
+    window.resize(1920, 1080)
+    left, right = splitter.sizes()
+    assert right <= 560
+    assert left > right
     window.close()
 
 
@@ -1446,4 +1444,85 @@ def test_transcription_from_previous_source_cannot_replace_current_cues(
     qtbot.waitUntil(lambda: bool(drained), timeout=3000)
     assert not applied
     assert [s.text for s in window.caption_panel.segments] == ["current source"]
+    window.close()
+
+
+def test_timeline_docks_full_width_and_the_sidebar_is_capped(qtbot):
+    """Wide-screen layout: the timeline spans the window under both columns,
+    and the sidebar stops growing at its designed width so the video grows."""
+    from PySide6.QtCore import QObject, Signal
+
+    class MockCore(QObject):
+        progress = Signal(str, str, float)
+
+        def call(self, method, params=None):
+            raise RuntimeError("no calls expected")
+
+        def close(self):
+            pass
+
+    window = MainWindow(core_client=MockCore())
+    qtbot.addWidget(window)
+
+    from PySide6.QtWidgets import QSplitter
+
+    central = window.centralWidget()
+    splitter = window.findChild(QSplitter)
+    assert splitter is not None
+
+    # The timeline no longer lives in the splitter's left column; it docks
+    # under the splitter so it spans the whole window.
+    left_widget = splitter.widget(0)
+    ancestor = window.player.parentWidget()
+    while ancestor is not None and ancestor is not left_widget:
+        ancestor = ancestor.parentWidget()
+    assert ancestor is left_widget  # sanity: the player is in the left column
+    ancestor = window.timeline_scroll.parentWidget()
+    while ancestor is not None and ancestor is not left_widget:
+        ancestor = ancestor.parentWidget()
+    assert ancestor is not left_widget
+    assert window.timeline_scroll.parentWidget() is central
+
+    # The sidebar is capped: extra width goes to the video, not the controls.
+    sidebar = window.caption_panel.parentWidget()
+    assert sidebar.maximumWidth() == 560
+    window.close()
+
+
+def test_action_bar_is_one_row_when_wide_and_wraps_when_narrow(qtbot):
+    """The action tiles keep together in one row on a wide window instead of
+    spreading across it, and wrap onto more rows only when narrow."""
+    from PySide6.QtCore import QObject, Signal
+
+    class MockCore(QObject):
+        progress = Signal(str, str, float)
+
+        def call(self, method, params=None):
+            raise RuntimeError("no calls expected")
+
+        def close(self):
+            pass
+
+    window = MainWindow(core_client=MockCore())
+    qtbot.addWidget(window)
+
+    window.resize(1920, 1080)
+    window.show()
+    qtbot.wait(50)
+
+    def visible_ys() -> set[int]:
+        ys = set()
+        for i in range(window.action_bar.count()):
+            widget = window.action_bar.itemAt(i).widget()
+            if widget is not None and widget.isVisible():
+                ys.add(widget.y())
+        return ys
+
+    ys_wide = visible_ys()
+    assert len(ys_wide) == 1, f"wide window spread the action bar: {ys_wide}"
+
+    window.resize(760, 700)
+    qtbot.wait(50)
+    ys_narrow = visible_ys()
+    assert len(ys_narrow) > 1, "narrow window should wrap the action bar"
     window.close()

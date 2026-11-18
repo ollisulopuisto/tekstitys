@@ -24,6 +24,10 @@ from app.models.captions import (
 
 # Caption blocks start below the time ruler.
 _TRACK_TOP = 24
+# A track at least this tall splits into two lanes; neighbouring captions
+# alternate lanes so a tall, full-width timeline shows more of each cue.
+_LANE_MIN_H = 40
+_LANE_GAP = 4
 # A press this close to a block's edge takes hold of that edge, not the body.
 _CUE_EDGE_PX = 6
 # Less movement than this is a click, not a drag.
@@ -120,6 +124,9 @@ class VisualTimelineWidget(QWidget):
         self._static_cache: QPixmap | None = None
         self._cached_key: tuple | None = None
         self._static_rect = QRect()
+        # Caption identity -> lane, rebuilt when the list or height changes.
+        self._lanes_cache: dict[int, int] = {}
+        self._lanes_key: tuple | None = None
         self.setToolTip(
             "Drag the blue trim handles to shorten the beginning or end,\n"
             "or press I / O to set the start / end at the playhead.\n"
@@ -230,6 +237,8 @@ class VisualTimelineWidget(QWidget):
         self.segments = list(segments)
         self._refresh_segment_flags()
         self._invalidate_static()
+        # New caption objects need new lanes even when times and text match.
+        self._lanes_key = None
         self.update()
 
     def _refresh_segment_flags(self) -> None:
@@ -263,6 +272,61 @@ class VisualTimelineWidget(QWidget):
         pct = max(0.0, min(1.0, x / max(1, self.width() - 1)))
         return int(pct * self.duration_ms)
 
+    def _lane_count(self) -> int:
+        """Two lanes when the track is tall enough, one otherwise."""
+        track_h = self.height() - _TRACK_TOP - 4
+        return 2 if track_h >= 2 * _LANE_MIN_H + _LANE_GAP else 1
+
+    def _lanes(self) -> dict[int, int]:
+        """Caption identity -> lane, recomputed only when the list or the
+        height changes, so hover and paint stay O(1) per cue.
+
+        Neighbouring captions alternate lanes, but a caption only takes a
+        lane whose previous cue has ended: two cues on one lane never
+        overlap unless both lanes are busy.
+        """
+        key = (self._segments_signature(), self._lane_count())
+        if key != self._lanes_key:
+            lanes: dict[int, int] = {}
+            last_end = [-(10**15), -(10**15)]
+            previous = 1
+            for seg in self.segments:
+                lane = 0
+                if self._lane_count() == 2:
+                    lane = 1 - previous
+                    if last_end[lane] > seg.start_ms:
+                        # The alternating lane's cue is still running; take
+                        # the other lane if free, else accept the overlap.
+                        if last_end[previous] <= seg.start_ms:
+                            lane = previous
+                lanes[id(seg)] = lane
+                # A shorter cue overlapping a longer one must not free the
+                # lane early, or a later cue lands on top of the long one.
+                last_end[lane] = max(last_end[lane], seg.end_ms)
+                previous = lane
+            self._lanes_cache = lanes
+            self._lanes_key = key
+        return self._lanes_cache
+
+    def _lane_of(self, seg: CaptionSegment) -> int:
+        """The lane of a caption; anything unknown sits on top."""
+        return self._lanes().get(id(seg), 0)
+
+    def _lane_span(self, lane: int) -> tuple[float, float]:
+        """The (top, height) of one lane of the caption track."""
+        track_h = self.height() - _TRACK_TOP - 4
+        lanes = self._lane_count()
+        lane_h = (track_h - (lanes - 1) * _LANE_GAP) / lanes
+        return _TRACK_TOP + lane * (lane_h + _LANE_GAP), lane_h
+
+    def _lane_at(self, y: float) -> int | None:
+        """The lane under a y position, or None above the track / in the gap."""
+        for lane in range(self._lane_count()):
+            top, height = self._lane_span(lane)
+            if top <= y <= top + height:
+                return lane
+        return None
+
     def _trim_handle_at(self, x: float) -> str | None:
         if self.duration_ms <= 0:
             return None
@@ -277,7 +341,13 @@ class VisualTimelineWidget(QWidget):
         """The caption block under a point, and which part of it: an edge or the body."""
         if self.duration_ms <= 0 or y < _TRACK_TOP:
             return None
+        lane = self._lane_at(y)
+        if lane is None:
+            return None
+        lanes = self._lanes()
         for seg in self.segments:
+            if lanes.get(id(seg), 0) != lane:
+                continue
             x_start = self._ms_to_x(seg.start_ms)
             x_end = x_start + max(6.0, self._ms_to_x(seg.end_ms) - x_start)
             if abs(x - x_start) <= _CUE_EDGE_PX:
@@ -407,11 +477,15 @@ class VisualTimelineWidget(QWidget):
             target_ms = self._x_to_ms(event.position().x())
             self.current_position_ms = target_ms
 
-            # Check if clicked inside a segment
+            # A click on a caption block selects that block; overlapping
+            # captions sit on separate lanes, so the lane-aware hit decides.
+            # Scrubbing the ruler or clicking empty track keeps the
+            # time-based first match.
+            hit = self._cue_at(event.position().x(), event.position().y())
             # Use binary search only when ordering and non-overlap are known;
             # unusual sidecars retain the original first-match behavior.
-            clicked_seg = None
-            if self._segments_non_overlapping:
+            clicked_seg = hit[0] if hit else None
+            if clicked_seg is None and self._segments_non_overlapping:
                 idx = (
                     bisect.bisect_right(
                         self.segments, target_ms, key=lambda s: s.start_ms
@@ -422,7 +496,7 @@ class VisualTimelineWidget(QWidget):
                     cand = self.segments[idx]
                     if cand.start_ms <= target_ms <= cand.end_ms:
                         clicked_seg = cand
-            else:
+            elif clicked_seg is None:
                 clicked_seg = next(
                     (
                         seg
@@ -437,7 +511,6 @@ class VisualTimelineWidget(QWidget):
                 self.segment_selected.emit(clicked_seg)
 
             self.seek_requested.emit(target_ms)
-            hit = self._cue_at(event.position().x(), event.position().y())
             if hit:
                 seg, mode = hit
                 self._cue_drag = _CueDrag(
@@ -634,6 +707,8 @@ class VisualTimelineWidget(QWidget):
 
         painter.setFont(cue_font)
         metrics = QFontMetrics(cue_font)
+        # Lane assignment is built once per paint, not per cue.
+        lanes = self._lanes()
         # Use bisect to quickly skip segments outside the visible clip region
         # when segments are sorted and non-overlapping.
         if self._segments_non_overlapping and self.segments:
@@ -650,7 +725,7 @@ class VisualTimelineWidget(QWidget):
                     break
                 seg_w = max(6.0, self._ms_to_x(seg.end_ms) - x_start)
                 if x_start + seg_w >= clip_left:
-                    self._paint_cue(painter, seg, metrics)
+                    self._paint_cue(painter, seg, metrics, lanes.get(id(seg), 0))
                 idx += 1
         else:
             for seg in self.segments:
@@ -658,16 +733,20 @@ class VisualTimelineWidget(QWidget):
                 seg_w = max(6.0, self._ms_to_x(seg.end_ms) - x_start)
                 if x_start > clip_right or x_start + seg_w < clip_left:
                     continue
-                self._paint_cue(painter, seg, metrics)
+                self._paint_cue(painter, seg, metrics, lanes.get(id(seg), 0))
 
     def _paint_cue(
-        self, painter: QPainter, seg: CaptionSegment, metrics: QFontMetrics
+        self,
+        painter: QPainter,
+        seg: CaptionSegment,
+        metrics: QFontMetrics,
+        lane: int,
     ) -> None:
         """One caption block, in the track below the ruler. The painter's font
         is already the cue font."""
-        # Caption track section (from y=24 to y=h-6)
-        track_y = _RULER_H + 4
-        track_h = self.height() - track_y - 4
+        # Caption track section (from y=24 to y=h-6), split into lanes
+        # when the track is tall.
+        track_y, track_h = self._lane_span(lane)
         x_start = self._ms_to_x(seg.start_ms)
         x_end = self._ms_to_x(seg.end_ms)
         seg_w = max(6.0, x_end - x_start)
@@ -707,6 +786,11 @@ class TimelineScroll(QScrollArea):
             timeline.height() + self.horizontalScrollBar().sizeHint().height()
         )
         timeline.zoom_requested.connect(self.zoom_by)
+
+    def set_track_height(self, height: int) -> None:
+        """Resize the timeline, and this scroll area around it, to `height` px."""
+        self.timeline.setFixedHeight(height)
+        self.setFixedHeight(height + self.horizontalScrollBar().sizeHint().height())
 
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)

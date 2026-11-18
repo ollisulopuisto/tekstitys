@@ -26,7 +26,6 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QComboBox,
-    QGridLayout,
     QDialog,
     QFileDialog,
     QButtonGroup,
@@ -81,6 +80,7 @@ from app.views.settings_dialog import OrukeetSettingsDialog
 from app.services import vision_frames
 from app.views.thumbnail_panel import ThumbnailPanel
 from app.views.tile_buttons import ROW_HEIGHT, chevron_url, chip, dense_tile
+from app.views.flow_layout import FlowLayout
 from app.views.timeline import TimelineScroll, VisualTimelineWidget
 from app.views.video_canvas import SAFE_PLATFORMS
 from app.views.video_player import VideoPlayerWidget
@@ -360,7 +360,7 @@ class MainWindow(QMainWindow):
     def _setup_ui(self) -> None:
         central = QWidget(self)
         self.setCentralWidget(central)
-        root_layout = QHBoxLayout(central)
+        root_layout = QVBoxLayout(central)
         root_layout.setContentsMargins(8, 8, 8, 8)
         root_layout.setSpacing(8)
 
@@ -373,14 +373,14 @@ class MainWindow(QMainWindow):
         left_col.setContentsMargins(4, 4, 4, 4)
         left_col.setSpacing(8)
 
-        # Top Action Bar: square tiles in three columns. A vertical video leaves
-        # a narrow column beside its preview, so the bar has to fit that.
-        action_bar = QGridLayout()
-        action_bar.setSpacing(4)
+        # Top Action Bar: one compact row of tiles that wraps onto further
+        # rows only when the column is too narrow (a vertical video beside a
+        # 9:16 preview). A wide window must not spread the buttons apart.
+        action_bar = FlowLayout(spacing=4)
         self.action_bar = action_bar
         self.open_btn = dense_tile("Open", "folder", "Open a video")
         self.open_btn.clicked.connect(self.open_file_dialog)
-        action_bar.addWidget(self.open_btn, 0, 0)
+        action_bar.addWidget(self.open_btn)
 
         self.save_btn = dense_tile(
             "Save",
@@ -389,7 +389,7 @@ class MainWindow(QMainWindow):
         )
         self.save_btn.clicked.connect(self._on_save_requested)
         self.save_btn.setEnabled(False)
-        action_bar.addWidget(self.save_btn, 0, 1)
+        action_bar.addWidget(self.save_btn)
 
         # Client review: send the captions to a client's browser, take the fixes back
         self.review_btn = dense_tile(
@@ -412,7 +412,7 @@ class MainWindow(QMainWindow):
         self.review_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.review_btn.setMenu(review_menu)
         self.review_btn.setEnabled(False)
-        action_bar.addWidget(self.review_btn, 0, 2)
+        action_bar.addWidget(self.review_btn)
 
         # B-roll: Creative Commons pictures and footage over the audio, credited
         self.broll_btn = dense_tile(
@@ -423,7 +423,7 @@ class MainWindow(QMainWindow):
         )
         self.broll_btn.clicked.connect(self._on_broll)
         self.broll_btn.setEnabled(False)
-        action_bar.addWidget(self.broll_btn, 1, 0)
+        action_bar.addWidget(self.broll_btn)
 
         # The export format belongs here, not in a dialog at render time: it
         # decides the canvas the captions are laid out on, so the preview
@@ -441,7 +441,7 @@ class MainWindow(QMainWindow):
         )
         self.format_combo.setMinimumContentsLength(9)
         self.format_combo.setFixedHeight(ROW_HEIGHT)
-        action_bar.addWidget(self.format_combo, 1, 1)
+        action_bar.addWidget(self.format_combo)
 
         # Crop or letterbox, when the export changes the shape of the source.
         # Hidden otherwise, so the row takes no room.
@@ -460,7 +460,6 @@ class MainWindow(QMainWindow):
         self.crop_combo.setStyleSheet(combo_style())
         self.crop_combo.setFixedHeight(ROW_HEIGHT)
         self.crop_combo.setVisible(False)
-        action_bar.addWidget(self.crop_combo, 3, 0, 1, 3)
 
         # A smaller copy from the same encode: small for clients to proof, the
         # full-size one for publishing.
@@ -477,7 +476,8 @@ class MainWindow(QMainWindow):
         )
         self.proof_combo.setMinimumContentsLength(9)
         self.proof_combo.setFixedHeight(ROW_HEIGHT)
-        action_bar.addWidget(self.proof_combo, 1, 2)
+        action_bar.addWidget(self.proof_combo)
+        action_bar.addWidget(self.crop_combo)
 
         # Intro and outro clips, joined to the render in the same encode.
         self.bumpers_btn = dense_tile("Intro/outro", "layers", "Intro and outro clips")
@@ -485,7 +485,7 @@ class MainWindow(QMainWindow):
         self.bumpers_menu.aboutToShow.connect(self._fill_bumpers_menu)
         self.bumpers_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.bumpers_btn.setMenu(self.bumpers_menu)
-        action_bar.addWidget(self.bumpers_btn, 2, 0)
+        action_bar.addWidget(self.bumpers_btn)
         self._update_bumpers_button()
 
         # A logo in a corner, for videos that don't carry one of their own.
@@ -494,7 +494,7 @@ class MainWindow(QMainWindow):
         self.bug_menu.aboutToShow.connect(self._fill_bug_menu)
         self.bug_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.bug_btn.setMenu(self.bug_menu)
-        action_bar.addWidget(self.bug_btn, 2, 1)
+        action_bar.addWidget(self.bug_btn)
         self._apply_bug()
 
         self.thumb_btn = dense_tile(
@@ -502,7 +502,7 @@ class MainWindow(QMainWindow):
         )
         self.thumb_btn.clicked.connect(self.trigger_extract_thumbnail)
         self.thumb_btn.setEnabled(False)
-        action_bar.addWidget(self.thumb_btn, 2, 2)
+        action_bar.addWidget(self.thumb_btn)
 
         self.render_btn = dense_tile(
             "Render",
@@ -512,10 +512,8 @@ class MainWindow(QMainWindow):
         )
         self.render_btn.clicked.connect(self._on_render_video_requested)
         self.render_btn.setEnabled(False)
-        action_bar.addWidget(self.render_btn, 4, 0, 1, 3)
+        action_bar.addWidget(self.render_btn)
 
-        for column in range(3):
-            action_bar.setColumnStretch(column, 1)
         left_col.addLayout(action_bar)
 
         # I / O set the trim's start / end at the playhead, as in video editors: stop
@@ -530,11 +528,12 @@ class MainWindow(QMainWindow):
         self.overlay = self.player.overlay
         left_col.addWidget(self.player, stretch=1)
 
-        # Visual Timeline Widget, with its edit tools and zoom above it
+        # Visual Timeline Widget, with its edit tools and zoom above it.
+        # It docks full width below the splitter, so a wide window gives the
+        # captions more room instead of widening the sidebar past its design.
         self.timeline = VisualTimelineWidget(self)
         self.timeline_scroll = TimelineScroll(self.timeline, self)
-        left_col.addWidget(self.timeline_scroll)
-        left_col.addLayout(self._build_timeline_toolbar())
+        self.timeline_scroll.set_track_height(140)
 
         splitter.addWidget(left_widget)
 
@@ -585,12 +584,23 @@ class MainWindow(QMainWindow):
             lbl.hide()
 
         splitter.addWidget(right_widget)
+        # On a wide window the sidebar stops at its designed width and the
+        # preview column takes the rest; past that, controls only spread out.
+        right_widget.setMaximumWidth(560)
         # The sidebar gets three parts to the preview column's two: the caption
         # list and its controls need the room more than the 9:16 preview does.
         splitter.setStretchFactor(0, 2)
         splitter.setStretchFactor(1, 3)
         splitter.setSizes([420, 630])
-        root_layout.addWidget(splitter)
+        root_layout.addWidget(splitter, stretch=1)
+
+        # Full-width timeline dock under both columns.
+        timeline_dock = QVBoxLayout()
+        timeline_dock.setContentsMargins(0, 0, 0, 0)
+        timeline_dock.setSpacing(4)
+        timeline_dock.addLayout(self._build_timeline_toolbar())
+        timeline_dock.addWidget(self.timeline_scroll)
+        root_layout.addLayout(timeline_dock)
 
         # Status Bar
         self.status = QStatusBar()

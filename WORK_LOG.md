@@ -104,3 +104,23 @@ Group Words, Fix Orphans, Save, In/Out, both Shifts, Delete Empty) up its
 parent chain and asserts it lands on a tab page, then switches to that tab
 and asserts the button is visible. Guards the tabs rebuild against creating
 a control but never placing it.
+
+Wide-screen layout (sketch G, picked 2026-11-18): the right sidebar is
+capped at 560 px (right_widget.setMaximumWidth), so on a wide window the
+video preview grows instead of the controls spreading. The timeline leaves
+the left column and docks full width below the splitter, 140 px tall, with
+its edit-mode/zoom toolbar above it. When the track is tall enough
+(2 x 40 px lanes + gap) it splits into two lanes, neighbouring captions
+alternating lanes; hit testing respects the lane under the pointer. A short
+timeline stays single-lane, so narrow windows are unchanged.
+
+Tests: lane split, single-lane fallback, lane-aware hit testing
+(test_timeline.py); dock placement and the 560 px cap
+(test_main_window.py, MockCore). Verified visually with an offscreen grab
+at 1920x1080: sidebar capped, preview wide, two-lane timeline across the
+bottom. macOS GUI not run locally.
+Review follow-up (Olli, 2026-11-18): the action tiles spread across the wide
+left column in a 3-column grid. The action bar is now the existing
+FlowLayout - one compact row when the column is wide, wrapping onto more
+rows only when narrow. Crop combo moved after proofreading so the
+B-roll/Export/proof group stays together.
