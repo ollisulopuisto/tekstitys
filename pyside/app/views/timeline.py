@@ -124,6 +124,9 @@ class VisualTimelineWidget(QWidget):
         self._static_cache: QPixmap | None = None
         self._cached_key: tuple | None = None
         self._static_rect = QRect()
+        # Caption identity -> lane, rebuilt when the list or height changes.
+        self._lanes_cache: dict[int, int] = {}
+        self._lanes_key: tuple | None = None
         self.setToolTip(
             "Drag the blue trim handles to shorten the beginning or end,\n"
             "or press I / O to set the start / end at the playhead.\n"
@@ -272,12 +275,38 @@ class VisualTimelineWidget(QWidget):
         track_h = self.height() - _TRACK_TOP - 4
         return 2 if track_h >= 2 * _LANE_MIN_H + _LANE_GAP else 1
 
+    def _lanes(self) -> dict[int, int]:
+        """Caption identity -> lane, recomputed only when the list or the
+        height changes, so hover and paint stay O(1) per cue.
+
+        Neighbouring captions alternate lanes, but a caption only takes a
+        lane whose previous cue has ended: two cues on one lane never
+        overlap unless both lanes are busy.
+        """
+        key = (self._segments_signature(), self._lane_count())
+        if key != self._lanes_key:
+            lanes: dict[int, int] = {}
+            last_end = [-(10**15), -(10**15)]
+            previous = 1
+            for seg in self.segments:
+                lane = 0
+                if self._lane_count() == 2:
+                    lane = 1 - previous
+                    if last_end[lane] > seg.start_ms:
+                        # The alternating lane's cue is still running; take
+                        # the other lane if free, else accept the overlap.
+                        if last_end[previous] <= seg.start_ms:
+                            lane = previous
+                lanes[id(seg)] = lane
+                last_end[lane] = seg.end_ms
+                previous = lane
+            self._lanes_cache = lanes
+            self._lanes_key = key
+        return self._lanes_cache
+
     def _lane_of(self, seg: CaptionSegment) -> int:
-        """Neighbouring captions alternate lanes; anything unknown sits on top."""
-        if self._lane_count() < 2:
-            return 0
-        index = self._index_of(seg)
-        return (index if index >= 0 else 0) % 2
+        """The lane of a caption; anything unknown sits on top."""
+        return self._lanes().get(id(seg), 0)
 
     def _lane_span(self, lane: int) -> tuple[float, float]:
         """The (top, height) of one lane of the caption track."""
@@ -311,8 +340,9 @@ class VisualTimelineWidget(QWidget):
         lane = self._lane_at(y)
         if lane is None:
             return None
+        lanes = self._lanes()
         for seg in self.segments:
-            if self._lane_of(seg) != lane:
+            if lanes.get(id(seg), 0) != lane:
                 continue
             x_start = self._ms_to_x(seg.start_ms)
             x_end = x_start + max(6.0, self._ms_to_x(seg.end_ms) - x_start)

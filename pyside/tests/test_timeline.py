@@ -577,3 +577,48 @@ def test_cue_hit_testing_respects_the_lanes(qtbot):
     # The same x on the other lane must not hit the cue.
     assert timeline._cue_at(x_first, lane1_mid) is None
     assert timeline._cue_at(x_second, lane0_mid) is None
+
+
+def test_overlapping_cues_never_share_a_lane_while_one_is_free(qtbot):
+    timeline = VisualTimelineWidget()
+    qtbot.addWidget(timeline)
+    timeline.setFixedHeight(140)
+    timeline.resize(800, 140)
+    long_cue = CaptionSegment(start_ms=0, end_ms=10000, text="Long")
+    short1 = CaptionSegment(start_ms=2000, end_ms=3000, text="Short 1")
+    short2 = CaptionSegment(start_ms=4000, end_ms=5000, text="Short 2")
+    timeline.set_segments([long_cue, short1, short2])
+
+    # Short 2 cannot alternate onto the long cue's lane - it is still
+    # running - so it stays under short 1 instead of overlapping.
+    assert timeline._lane_of(long_cue) == 0
+    assert timeline._lane_of(short1) == 1
+    assert timeline._lane_of(short2) == 1
+
+
+def test_dragging_a_caption_on_the_lower_lane(qtbot):
+    timeline = VisualTimelineWidget()
+    timeline.setFixedHeight(140)
+    timeline.resize(1000, 140)
+    timeline.set_duration(10000)  # 1 px is about 10 ms
+    qtbot.addWidget(timeline)
+    timeline.show()
+    seg1 = CaptionSegment(start_ms=1000, end_ms=3000, text="Top")
+    seg2 = CaptionSegment(start_ms=5000, end_ms=8000, text="Bottom")
+    timeline.set_segments([seg1, seg2])
+    retimed = []
+    timeline.cue_retimed.connect(retimed.append)
+
+    assert timeline._lane_of(seg2) == 1
+    lane1_y = int(timeline._lane_span(1)[0] + 10)
+    # seg2's body is at x = 500..800; drag from 600 to 700 (~1 s right).
+    _drag(qtbot, timeline, 600, 700, y=lane1_y)
+
+    assert retimed == [seg2]
+    assert abs(seg2.start_ms - 6000) <= 20
+    assert seg2.end_ms - seg2.start_ms == 3000
+    # A drag on the upper lane at the same x must not touch seg2.
+    seg2_start = seg2.start_ms
+    lane0_y = int(timeline._lane_span(0)[0] + 10)
+    _drag(qtbot, timeline, 700, 750, y=lane0_y)
+    assert seg2.start_ms == seg2_start
