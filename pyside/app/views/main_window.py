@@ -40,6 +40,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QToolButton,
     QPushButton,
+    QScrollArea,
     QSplitter,
     QStatusBar,
     QVBoxLayout,
@@ -537,10 +538,32 @@ class MainWindow(QMainWindow):
         splitter.addWidget(left_widget)
 
         # Right Column: Captions Panel (takes maximum space for caption text editing)
+        # The column's fixed sections can outweigh a short window; the scroll
+        # area takes the overflow then instead of crushing the caption table.
+        right_scroll = QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # The viewport fills its own background (palette Base, light); let
+        # the window's dark show through instead.
+        right_scroll.setStyleSheet(
+            "QScrollArea { background-color: #0f0f11; border: none; }"
+        )
+        right_scroll.viewport().setAutoFillBackground(False)
         right_widget = QWidget()
+        right_widget.setObjectName("right_sidebar")
+        # Plain QWidgets do not paint their palette background; inside the
+        # scroll area the light viewport would show through the gaps.
+        right_widget.setStyleSheet(
+            "QWidget#right_sidebar { background-color: #0f0f11; }"
+        )
         right_col = QVBoxLayout(right_widget)
         right_col.setContentsMargins(4, 4, 4, 4)
         right_col.setSpacing(4)
+        # Let the column's minimum height follow its content (the style
+        # section opens and closes), so the scroll area scrolls instead of
+        # squeezing the caption table below its floor.
+        right_col.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
 
         # Caption Editor & Inspector Panel
         self.caption_panel = CaptionPanelWidget(self)
@@ -582,7 +605,8 @@ class MainWindow(QMainWindow):
         for lbl in (self.meta_lbl, self.thumb_lbl, self.perf_lbl):
             lbl.hide()
 
-        splitter.addWidget(right_widget)
+        right_scroll.setWidget(right_widget)
+        splitter.addWidget(right_scroll)
         # The sidebar gets three parts to the preview column's two: the caption
         # list and its controls need the room more than the 9:16 preview does.
         splitter.setStretchFactor(0, 2)

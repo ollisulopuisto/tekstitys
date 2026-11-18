@@ -388,6 +388,14 @@ class CaptionPanelWidget(QWidget):
             "Right-click a word in the text to split the caption before it."
         )
         self.cue_table.installEventFilter(self)
+        # The table is the panel's only flexible element: without a floor, the
+        # fixed sections (position, style, thumbnail) squeeze it to a single
+        # row on a short window. Keep at least a few rows editable; the main
+        # window's scroll area takes the overflow instead.
+        self.cue_table.setMinimumHeight(
+            self.cue_table.horizontalHeader().sizeHint().height()
+            + 4 * self.cue_table.verticalHeader().defaultSectionSize()
+        )
         layout.addWidget(self.cue_table, stretch=1)
 
         # Row for word-level shifting

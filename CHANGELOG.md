@@ -25,6 +25,11 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
   and corresponding source archives. No separate Homebrew/server setup is needed
   in packaged builds. Distribution licensing remains a release gate.
 
+- Captions panel: the caption table keeps at least four rows of editing
+  space. The right column's fixed sections (position, style, thumbnail) used
+  to squeeze the table to a single row on short windows; the column now
+  scrolls instead.
+
 ## [v26.11.09.1] - 2026-11-09
 
 ### Fixed

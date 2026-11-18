@@ -4,6 +4,7 @@ import pytest
 
 from app.models.captions import CaptionSegment
 from app.models.project import VideoMetadata
+from PySide6.QtCore import QCoreApplication, QObject, Signal
 from PySide6.QtWidgets import QSplitter
 
 from app.views.main_window import MainWindow
@@ -1446,4 +1447,39 @@ def test_transcription_from_previous_source_cannot_replace_current_cues(
     qtbot.waitUntil(lambda: bool(drained), timeout=3000)
     assert not applied
     assert [s.text for s in window.caption_panel.segments] == ["current source"]
+    window.close()
+
+
+class _FakeCore(QObject):
+    """Stands in for the Rust core in layout tests: no binary on this host."""
+
+    progress = Signal(str, str, float)
+
+    def __init__(self):
+        super().__init__()
+        self.proc = None
+
+    def call(self, _method, _params=None):
+        raise RuntimeError("fake core: no calls expected in a layout test")
+
+    def close(self):
+        pass
+
+
+def test_caption_table_keeps_editing_space_on_a_short_window(qtbot):
+    """The sidebar's fixed sections must not crush the caption table.
+
+    The caption table is the right column's only flexible element: on a
+    short window with the style section open, the fixed sections around it
+    used to squeeze it to about one row.
+    """
+    window = MainWindow(core_client=_FakeCore())
+    qtbot.addWidget(window)
+    window.resize(760, 700)
+    window.caption_panel.btn_toggle_style.click()  # Olli's setup: style open
+    window.show()
+    QCoreApplication.processEvents()
+
+    table = window.caption_panel.cue_table
+    assert table.viewport().height() >= 100
     window.close()
