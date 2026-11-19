@@ -52,9 +52,7 @@ def test_a_menu_item_presses_its_button_only_while_it_is_enabled(qtbot):
 
 
 def _menu(window, title):
-    return next(
-        a.menu() for a in window.menuBar().actions() if a.text() == title
-    )
+    return next(a.menu() for a in window.menuBar().actions() if a.text() == title)
 
 
 def test_window_menu_minimizes_and_closes_the_window(qtbot):
