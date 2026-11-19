@@ -25,6 +25,7 @@ from PySide6.QtGui import (
     QShortcut,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -1823,6 +1824,22 @@ class MainWindow(QMainWindow):
             2000,
         )
 
+    @staticmethod
+    def _focused_edit(verb: str):
+        """Clipboard verb applied to whatever widget has focus.
+
+        Cut/Copy/Paste/Select All belong to the focused line edit or text
+        edit, not to a toolbar button, so there is no button to press.
+        Widgets without the verb (labels, buttons) make it a no-op."""
+
+        def run() -> None:
+            widget = QApplication.focusWidget()
+            fn = getattr(widget, verb[0].lower() + verb[1:].replace(" ", ""), None)
+            if callable(fn):
+                fn()
+
+        return run
+
     def _build_menus(self) -> None:
         """Menu bar with the standard shortcuts. Each item presses the button it
         names, so that button's own enabled state decides whether it does anything."""
@@ -1865,7 +1882,6 @@ class MainWindow(QMainWindow):
             press(self.save_btn),
         )
         file_menu.addSeparator()
-        add(file_menu, "Close Window", QKeySequence.StandardKey.Close, self.close)
         add(
             file_menu,
             "Quit Tekstitys",
@@ -1875,6 +1891,14 @@ class MainWindow(QMainWindow):
         )
 
         edit_menu = bar.addMenu("Edit")
+        for verb, key in (
+            ("Cut", QKeySequence.StandardKey.Cut),
+            ("Copy", QKeySequence.StandardKey.Copy),
+            ("Paste", QKeySequence.StandardKey.Paste),
+            ("Select All", QKeySequence.StandardKey.SelectAll),
+        ):
+            add(edit_menu, verb, key, self._focused_edit(verb))
+        edit_menu.addSeparator()
         add(
             edit_menu,
             "Undo Project Edit",
@@ -1924,6 +1948,10 @@ class MainWindow(QMainWindow):
             press(panel.btn_orukeet_settings),
             QAction.MenuRole.PreferencesRole,
         )
+
+        window_menu = bar.addMenu("Window")
+        add(window_menu, "Minimize", "Ctrl+M", self.showMinimized)
+        add(window_menu, "Close Window", QKeySequence.StandardKey.Close, self.close)
 
         help_menu = bar.addMenu("Help")
         add(help_menu, "What's New…", None, self.show_whats_new)
