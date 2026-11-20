@@ -2029,7 +2029,14 @@ class MainWindow(QMainWindow):
 
     def _show_about(self) -> None:
         """About Tekstitys: name, running version, what the app is for."""
-        current = whatsnew.current_version(self._whats_new_entries())
+        # The packaged bundle version wins: a release tag can be newer than
+        # the latest changelog heading, and users should see the version they
+        # installed. The changelog is the development fallback.
+        current = whatsnew.packaged_version() or whatsnew.current_version(
+            self._whats_new_entries()
+        )
+        if current and not current.startswith("v"):
+            current = f"v{current}"
         version = f"<p>Version {current}</p>" if current else ""
         QMessageBox.about(
             self,
