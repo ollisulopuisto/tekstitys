@@ -107,3 +107,51 @@ def test_edit_menu_cut_copy_paste_select_all_on_the_focused_widget(qtbot):
     # line edit must not change and nothing may crash.
     _find(window, "Paste").trigger()
     assert edit.text() == "hello"
+
+
+def test_window_menu_zoom_toggles_maximized(qtbot):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    win = _menu(window, "Window")
+    acts = {a.text(): a for a in win.actions() if not a.isSeparator()}
+    assert "Zoom" in acts, list(acts)
+    window.show()
+    assert not window.isMaximized()
+    acts["Zoom"].trigger()
+    assert window.isMaximized()
+    acts["Zoom"].trigger()
+    assert not window.isMaximized()
+
+
+def test_edit_menu_verbs_reach_the_caption_cell_editor(qtbot):
+    """The caption field is a table cell editor, not a lone QLineEdit: the
+    menu verbs must reach it there too (Olli's test-list item)."""
+    from PySide6.QtGui import QGuiApplication
+    from PySide6.QtWidgets import QApplication, QLineEdit
+
+    from app.models.captions import CaptionSegment
+    from app.views.caption_panel import COL_TEXT
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.set_caption_segments(
+        [CaptionSegment(start_ms=1000, end_ms=2000, text="hello world")]
+    )
+    window.show()
+    window.activateWindow()
+
+    table = window.caption_panel.cue_table
+    item = table.item(0, COL_TEXT)
+    table.scrollToItem(item)
+    table.editItem(item)  # opens the delegate editor, like a double-click
+    qtbot.waitUntil(lambda: isinstance(QApplication.focusWidget(), QLineEdit))
+    editor = QApplication.focusWidget()
+
+    _find(window, "Select All").trigger()
+    assert editor.selectedText() == "hello world"
+    _find(window, "Copy").trigger()
+    assert QGuiApplication.clipboard().text() == "hello world"
+    _find(window, "Cut").trigger()
+    assert editor.text() == ""
+    _find(window, "Paste").trigger()
+    assert editor.text() == "hello world"

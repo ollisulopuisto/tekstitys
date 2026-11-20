@@ -7,6 +7,10 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 
 ## [Unreleased]
 
+### Added
+- Window menu gains the standard Mac Zoom item, toggling the window between
+  maximized and its normal size next to Minimize and Close Window.
+
 ### Changed
 - Wide-screen layout: the sidebar stops at 560 px so the video preview takes
   the extra width, and the timeline docks full width under both columns.
