@@ -134,3 +134,21 @@ the #86 merge commit, so the packaged app contains the items. Not run on a
 Mac; if they are still missing for him, suspect the running copy predates
 v26.11.20.1. Real gap found: the Window menu had Minimize and Close Window
 but no Zoom. Added Window > Zoom (maximize/normal toggle) with a menu test.
+
+Top strip rebuild (sketch A, picked by Olli 2026-11-20, "yes this is good"):
+the strip mixed five actions with five render settings that looked like
+buttons and wrapped onto two rows. Now the strip is actions only - Open,
+Save, Review, B-roll, Thumbnail - then a single Output tile whose text is a
+live summary (format, proof copy, intro/outro, logo) opening one popup panel
+that holds the format, crop, proof, intro/outro and logo controls; Render
+stays big and last. The crop combo keeps its old semantics (offered only
+when the export shape differs from the source) inside the panel, label
+hiding with it. Video > Output Settings… opens the same panel. The strip
+keeps the FlowLayout, so a narrow column still wraps instead of spreading.
+
+Tests: strip order and contents, panel contents and opening from tile and
+menu, summary tracking format/proof/bumper changes
+(test_output_panel.py). Existing strip wrap test unchanged. Suite: same 5
+failures as unmodified main in this environment (missing ffmpeg binaries,
+broll animation timing, spec version fields); 497 pass. macOS GUI not run
+locally.
