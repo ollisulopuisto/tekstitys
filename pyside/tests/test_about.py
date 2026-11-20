@@ -80,9 +80,7 @@ def test_about_prefers_the_packaged_version_over_the_changelog(
     window = MainWindow()
     qtbot.addWidget(window)
     # Patch after window creation so nothing else in startup sees the fake path.
-    monkeypatch.setattr(
-        QApplication, "applicationDirPath", staticmethod(lambda: macos)
-    )
+    monkeypatch.setattr(QApplication, "applicationDirPath", staticmethod(lambda: macos))
     changelog_version = window._whats_new_entries()[0][0]
     _find(window, "About Tekstitys").trigger()
     assert len(shown) == 1
