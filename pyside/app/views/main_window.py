@@ -1840,6 +1840,13 @@ class MainWindow(QMainWindow):
 
         return run
 
+    def _toggle_zoom(self) -> None:
+        """Window > Zoom: the Mac green-button fit, maximized or back to normal."""
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+
     def _build_menus(self) -> None:
         """Menu bar with the standard shortcuts. Each item presses the button it
         names, so that button's own enabled state decides whether it does anything."""
@@ -1951,6 +1958,7 @@ class MainWindow(QMainWindow):
 
         window_menu = bar.addMenu("Window")
         add(window_menu, "Minimize", "Ctrl+M", self.showMinimized)
+        add(window_menu, "Zoom", None, self._toggle_zoom)
         add(window_menu, "Close Window", QKeySequence.StandardKey.Close, self.close)
 
         help_menu = bar.addMenu("Help")

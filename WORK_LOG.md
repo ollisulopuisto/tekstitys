@@ -124,3 +124,13 @@ left column in a 3-column grid. The action bar is now the existing
 FlowLayout - one compact row when the column is wide, wrapping onto more
 rows only when narrow. Crop combo moved after proofreading so the
 B-roll/Export/proof group stays together.
+
+Edit menu Cut/Copy/Paste investigation (Olli, 2026-11-20): he could not find
+Edit > Cut/Copy/Paste/Select All while testing. Verified on main: #86 defines
+them, dispatch via QApplication.focusWidget() reaches a focused QLineEdit and,
+with a new regression test, the caption table's cell editor as well. The
+v26.11.20.1 DMG is built by release.yml from tag v26.11.20.1, which points at
+the #86 merge commit, so the packaged app contains the items. Not run on a
+Mac; if they are still missing for him, suspect the running copy predates
+v26.11.20.1. Real gap found: the Window menu had Minimize and Close Window
+but no Zoom. Added Window > Zoom (maximize/normal toggle) with a menu test.
