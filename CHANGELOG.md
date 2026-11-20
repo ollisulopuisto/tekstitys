@@ -10,6 +10,9 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
 ### Added
 - Window menu gains the standard Mac Zoom item, toggling the window between
   maximized and its normal size next to Minimize and Close Window.
+- About Tekstitys: name, running version and what the app is for. Carries
+  Qt's AboutRole, so on macOS it sits in the app menu where Mac users look
+  for it; on other platforms it stays under Help.
 
 ### Changed
 - Top strip: actions only (Open, Save, Review, B-roll, Thumbnail), then one

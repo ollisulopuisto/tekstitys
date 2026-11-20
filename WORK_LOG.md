@@ -152,3 +152,14 @@ menu, summary tracking format/proof/bumper changes
 failures as unmodified main in this environment (missing ffmpeg binaries,
 broll animation timing, spec version fields); 497 pass. macOS GUI not run
 locally.
+
+About Tekstitys (Olli, 2026-11-20, "add about in the menu"): the app had no
+About at all. Added "About Tekstitys" with QAction.AboutRole, which Qt moves
+into the macOS app menu (the standard Mac placement); elsewhere it stays
+under Help. The dialog shows the name, the running version from the bundled
+CHANGELOG (same source bundle_version.py uses) and a one-line description.
+Tests: menu item carries AboutRole, dialog shows app name and version
+(test_about.py). Note for future modal testing: QMessageBox.about is its own
+static and is not covered by the conftest message-box fixture. macOS GUI not
+run locally.
+

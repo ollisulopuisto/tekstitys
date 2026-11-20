@@ -2016,7 +2016,29 @@ class MainWindow(QMainWindow):
         add(window_menu, "Close Window", QKeySequence.StandardKey.Close, self.close)
 
         help_menu = bar.addMenu("Help")
+        # AboutRole moves this to the app menu (Tekstitys) on macOS, the
+        # standard place for About; elsewhere it stays here under Help.
+        add(
+            help_menu,
+            "About Tekstitys",
+            None,
+            self._show_about,
+            QAction.MenuRole.AboutRole,
+        )
         add(help_menu, "What's New…", None, self.show_whats_new)
+
+    def _show_about(self) -> None:
+        """About Tekstitys: name, running version, what the app is for."""
+        current = whatsnew.current_version(self._whats_new_entries())
+        version = f"<p>Version {current}</p>" if current else ""
+        QMessageBox.about(
+            self,
+            "About Tekstitys",
+            "<b>Tekstitys</b>"
+            f"{version}"
+            "<p>Drop a video, get perfect captions. Transcription, styling "
+            "and rendering all run locally on this Mac.</p>",
+        )
 
     def _whats_new_entries(self) -> list:
         path = whatsnew.changelog_path()
