@@ -6,6 +6,7 @@
 # second source.
 from __future__ import annotations
 
+import plistlib
 import re
 from pathlib import Path
 
@@ -64,6 +65,29 @@ def current_version(entries: list[tuple[str, list[str]]]) -> str | None:
     """The running build's version: the newest changelog heading, the same
     source bundle_version.py uses for local builds."""
     return entries[0][0] if entries else None
+
+
+def packaged_version(app_dir: str | None = None) -> str | None:
+    """The version the bundle was packaged with (CFBundleShortVersionString),
+    or None in development runs where no Info.plist exists.
+
+    Release CI can tag a version newer than the latest changelog heading, so
+    the packaged metadata is the authoritative source for the installed build;
+    the changelog is the fallback bundle_version.py itself uses for local
+    builds. PyInstaller lays the bundle out as Contents/MacOS next to
+    Contents/Info.plist; QApplication.applicationDirPath() points at MacOS.
+    """
+    if app_dir is None:
+        from PySide6.QtWidgets import QApplication
+
+        app_dir = QApplication.applicationDirPath()
+    info = Path(app_dir).parent / "Info.plist"
+    try:
+        with info.open("rb") as handle:
+            version = plistlib.load(handle).get("CFBundleShortVersionString")
+    except (OSError, ValueError):
+        return None
+    return version if isinstance(version, str) and version else None
 
 
 def _version_key(version: str) -> tuple[int, ...]:
