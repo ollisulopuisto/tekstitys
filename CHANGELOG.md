@@ -12,6 +12,13 @@ and this project adheres to [Calendar Versioning](https://calver.org/) (`vYY.MM.
   maximized and its normal size next to Minimize and Close Window.
 
 ### Changed
+- Top strip: actions only (Open, Save, Review, B-roll, Thumbnail), then one
+  Output button whose text is a live summary of every render setting
+  (format, proof copy, intro/outro, logo) and which opens a single settings
+  panel holding the format, crop, proof, intro/outro and logo controls.
+  Render stays big and last. Sketch A, picked by Olli 2026-11-20.
+
+### Changed
 - Wide-screen layout: the sidebar stops at 560 px so the video preview takes
   the extra width, and the timeline docks full width under both columns.
   A tall timeline splits into two lanes, neighbouring captions alternating,

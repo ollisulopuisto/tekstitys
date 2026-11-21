@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFileDialog,
+    QFormLayout,
     QButtonGroup,
     QHBoxLayout,
     QInputDialog,
@@ -442,7 +443,9 @@ class MainWindow(QMainWindow):
         )
         self.format_combo.setMinimumContentsLength(9)
         self.format_combo.setFixedHeight(ROW_HEIGHT)
-        action_bar.addWidget(self.format_combo)
+        self.format_combo.currentIndexChanged.connect(
+            lambda _i: self._update_output_summary()
+        )
 
         # Crop or letterbox, when the export changes the shape of the source.
         # Hidden otherwise, so the row takes no room.
@@ -461,6 +464,8 @@ class MainWindow(QMainWindow):
         self.crop_combo.setStyleSheet(combo_style())
         self.crop_combo.setFixedHeight(ROW_HEIGHT)
         self.crop_combo.setVisible(False)
+        self.crop_label = QLabel("Crop")
+        self.crop_label.setVisible(False)
 
         # A smaller copy from the same encode: small for clients to proof, the
         # full-size one for publishing.
@@ -477,8 +482,9 @@ class MainWindow(QMainWindow):
         )
         self.proof_combo.setMinimumContentsLength(9)
         self.proof_combo.setFixedHeight(ROW_HEIGHT)
-        action_bar.addWidget(self.proof_combo)
-        action_bar.addWidget(self.crop_combo)
+        self.proof_combo.currentIndexChanged.connect(
+            lambda _i: self._update_output_summary()
+        )
 
         # Intro and outro clips, joined to the render in the same encode.
         self.bumpers_btn = dense_tile("Intro/outro", "layers", "Intro and outro clips")
@@ -486,7 +492,6 @@ class MainWindow(QMainWindow):
         self.bumpers_menu.aboutToShow.connect(self._fill_bumpers_menu)
         self.bumpers_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.bumpers_btn.setMenu(self.bumpers_menu)
-        action_bar.addWidget(self.bumpers_btn)
         self._update_bumpers_button()
 
         # A logo in a corner, for videos that don't carry one of their own.
@@ -495,8 +500,29 @@ class MainWindow(QMainWindow):
         self.bug_menu.aboutToShow.connect(self._fill_bug_menu)
         self.bug_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.bug_btn.setMenu(self.bug_menu)
-        action_bar.addWidget(self.bug_btn)
         self._apply_bug()
+
+        # One Output button carries every render setting, so the strip holds
+        # actions only and the settings stop posing as buttons. Its text is a
+        # live summary; the click opens the panel with the controls themselves.
+        self.output_btn = dense_tile(
+            "Output",
+            "gear",
+            "What Render makes: the export shape, crop, proof copy, "
+            "intro/outro and logo. Opens the output settings.",
+        )
+        self.output_btn.clicked.connect(self._show_output_panel)
+
+        self.output_panel = QDialog(self, Qt.WindowType.Popup)
+        output_form = QFormLayout(self.output_panel)
+        output_form.setContentsMargins(12, 12, 12, 12)
+        output_form.setSpacing(8)
+        output_form.addRow("Format", self.format_combo)
+        output_form.addRow(self.crop_label, self.crop_combo)
+        output_form.addRow("Proof copy", self.proof_combo)
+        output_form.addRow("Intro/outro", self.bumpers_btn)
+        output_form.addRow("Logo", self.bug_btn)
+        self._update_output_summary()
 
         self.thumb_btn = dense_tile(
             "Thumbnail", "image", "Extract a thumbnail from the video"
@@ -504,6 +530,8 @@ class MainWindow(QMainWindow):
         self.thumb_btn.clicked.connect(self.trigger_extract_thumbnail)
         self.thumb_btn.setEnabled(False)
         action_bar.addWidget(self.thumb_btn)
+        # The actions end here; the Output settings and Render close the row.
+        action_bar.addWidget(self.output_btn)
 
         self.render_btn = dense_tile(
             "Render",
@@ -799,8 +827,29 @@ class MainWindow(QMainWindow):
     def _update_crop_offer(self) -> None:
         offered = self._crop_offered()
         self.crop_combo.setVisible(offered)
+        self.crop_label.setVisible(offered)
         # The editor draws the same choice the render makes.
         self.player.canvas.set_crop_fill(offered and self._crop_mode() != "fit")
+
+    def _update_output_summary(self) -> None:
+        """The Output tile says what Render currently makes, at a glance."""
+        fmt = self.format_combo.currentData()
+        fmt = "Source" if fmt == "source" else str(fmt)
+        side = self.proof_combo.currentData()
+        proof = f"+{side}p" if side else "No proof"
+        self.output_btn.setText(
+            f"Output \u00b7 {fmt} \u00b7 {proof} \u00b7 "
+            f"{self.bumpers_btn.text()} \u00b7 {self.bug_btn.text()}"
+        )
+
+    def _show_output_panel(self) -> None:
+        """One panel with every render setting, from the strip or the menu."""
+        self._update_crop_offer()
+        below = self.output_btn.mapToGlobal(self.output_btn.rect().bottomLeft())
+        self.output_panel.move(below)
+        self.output_panel.show()
+        self.output_panel.raise_()
+        self.output_panel.activateWindow()
 
     def _on_crop_mode_changed(self, _index: int) -> None:
         QSettings().setValue(CROP_MODE_KEY, self.crop_combo.currentData())
@@ -1478,6 +1527,8 @@ class MainWindow(QMainWindow):
             "Clips played before and after the captioned video in every render.\n"
             + "\n".join(lines)
         )
+        if hasattr(self, "output_btn"):
+            self._update_output_summary()
 
     def _fill_bumpers_menu(self) -> None:
         menu = self.bumpers_menu
@@ -1566,6 +1617,8 @@ class MainWindow(QMainWindow):
             canvas.set_watermark(QPixmap(params["path"]), params)
         else:
             canvas.set_watermark(None)
+        if hasattr(self, "output_btn"):
+            self._update_output_summary()
 
     def _fill_bug_menu(self) -> None:
         menu = self.bug_menu
@@ -1922,6 +1975,7 @@ class MainWindow(QMainWindow):
         add(edit_menu, "Add Caption", "Ctrl+Shift+N", press(panel.btn_add_cue))
 
         video_menu = bar.addMenu("Video")
+        add(video_menu, "Output Settings…", None, self._show_output_panel)
         add(video_menu, "Render Video…", "Ctrl+R", press(self.render_btn))
         add(video_menu, "Extract Thumbnail", "Ctrl+Shift+T", press(self.thumb_btn))
         add(video_menu, "B-roll Reel…", "Ctrl+Shift+B", press(self.broll_btn))
