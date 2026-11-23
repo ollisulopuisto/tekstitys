@@ -195,7 +195,7 @@ def test_source_load_resets_metadata_but_keeps_separate_session_trees(
     a_history = window._histories[str(a)]
     monkeypatch.setattr(window.player, "load_video", lambda *_: None)
     monkeypatch.setattr(window, "trigger_extract_thumbnail", lambda *_: None)
-    monkeypatch.setattr(main_window.shutil, "which", lambda *_: None)
+    monkeypatch.setattr(window._frame_rate_probe, "start", lambda *_: None)
     window.load_video(str(b))
     assert window.project.video_path == str(b)
     assert window.project.thumbnail == {}
