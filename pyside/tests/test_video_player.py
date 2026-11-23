@@ -152,3 +152,12 @@ def test_mark_buttons_ask_for_the_trim_and_leave_focus_alone(qtbot):
     for btn in (player.mark_in_btn, player.mark_out_btn):
         assert btn.focusPolicy() == Qt.FocusPolicy.NoFocus
         assert "(I)" in btn.toolTip() or "(O)" in btn.toolTip()
+
+
+def test_loading_another_source_resets_frame_step_rate(qtbot, tmp_path):
+    player = VideoPlayerWidget()
+    qtbot.addWidget(player)
+    player.set_frame_rate(60)
+    player.load_video(str(tmp_path / 'absent.mp4'))
+    assert player._frame_duration_ms == 1000 / 30
+    player.release()

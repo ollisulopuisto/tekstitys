@@ -163,3 +163,19 @@ Tests: menu item carries AboutRole, dialog shows app name and version
 static and is not covered by the conftest message-box fixture. macOS GUI not
 run locally.
 
+
+## 2026-11-23: frame-rate probe responsiveness
+
+Replaced the GUI-thread ffprobe subprocess wait with a cancellable QProcess
+probe. Configured FFPROBE_PATH is honored before PATH lookup. Source switches
+reset frame stepping to 30 fps while probing; only the current probe can apply
+a validated positive finite rate. Five-second timeout and window close cancel
+without a GUI-thread wait. No change to preview/export caption layout.
+
+Local verification: real Qt offscreen event-loop tests exercise responsiveness,
+replacement, cancellation, missing executable, timeout and process cleanup;
+player regression demonstrates prior-source frame rate was retained on main.
+No interactive Qt visual acceptance, packaged macOS run, Rust core playback or
+full application suite. Main-window suite cannot collect in the minimal Python
+3.10 environment because framescore requires Python 3.13. No release/build or
+workflow changes.
