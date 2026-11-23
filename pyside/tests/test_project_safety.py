@@ -177,7 +177,6 @@ def test_source_load_resets_metadata_but_keeps_separate_session_trees(
     from PySide6.QtWidgets import QMessageBox
     from app.models.captions import PositionOverride
     from app.models.project import VideoMetadata
-    from app.views import main_window
     from app.views.caption_panel import COL_TEXT
 
     monkeypatch.setattr(
