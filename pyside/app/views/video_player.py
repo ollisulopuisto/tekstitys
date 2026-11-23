@@ -301,6 +301,7 @@ class VideoPlayerWidget(QWidget):
                 return
 
     def load_video(self, file_path: str) -> None:
+        self._frame_duration_ms = 1000 / 30
         url = QUrl.fromLocalFile(file_path)
         self.media_player.setSource(url)
         self._show_playing(False)

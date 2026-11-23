@@ -3,7 +3,6 @@ import bisect
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import threading
 from collections import deque
@@ -61,6 +60,7 @@ from app.models.captions import (
 )
 from app.portal_client import Portal, PortalError
 from app.services import media, transcribe_range, whatsnew
+from app.services.frame_rate import FrameRateProbe
 from app.services.broll import pipeline as broll_pipeline
 from app.services.broll import reel as broll_reel
 from app.services.broll import suggest as broll_suggest
@@ -198,6 +198,8 @@ class MainWindow(QMainWindow):
         self.core = core_client or CoreClient(parent=self)
         # Set by closeEvent; work finishing after that is not shown (see _in_gui).
         self._closed = False
+        self._frame_rate_probe = FrameRateProbe(self)
+        self._frame_rate_probe.ready.connect(self._apply_frame_rate)
         self._gui_call.connect(self._run_gui_call, Qt.ConnectionType.QueuedConnection)
         self.project = ProjectState()
         self._histories: dict[str, History] = {}
@@ -2497,6 +2499,10 @@ class MainWindow(QMainWindow):
         if file_path:
             self.load_video(file_path)
 
+    def _apply_frame_rate(self, fps: float) -> None:
+        if not self._closed:
+            self.player.set_frame_rate(fps)
+
     def load_video(self, file_path: str) -> None:
         if self._broll_cancel is not None:
             QMessageBox.information(
@@ -2517,31 +2523,7 @@ class MainWindow(QMainWindow):
         self.timeline.reset_trim_range()
         self._sync_play_range()
         self.player.load_video(file_path)
-        ffprobe = shutil.which("ffprobe")
-        if ffprobe:
-            try:
-                rate = subprocess.run(
-                    [
-                        ffprobe,
-                        "-v",
-                        "error",
-                        "-select_streams",
-                        "v:0",
-                        "-show_entries",
-                        "stream=avg_frame_rate",
-                        "-of",
-                        "default=noprint_wrappers=1:nokey=1",
-                        file_path,
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                    check=True,
-                ).stdout.strip()
-                numerator, denominator = rate.split("/")
-                self.player.set_frame_rate(float(numerator) / float(denominator))
-            except (OSError, subprocess.SubprocessError, ValueError, ZeroDivisionError):
-                pass
+        self._frame_rate_probe.start(file_path)
         self.thumb_btn.setEnabled(True)
         self.save_btn.setEnabled(True)
         self.review_btn.setEnabled(True)
@@ -2729,6 +2711,7 @@ class MainWindow(QMainWindow):
         # Nothing of this window should fire after it is gone.
         self._cancel_broll()
         self._closed = True
+        self._frame_rate_probe.cancel()
         self.perf_timer.stop()
         self._layout_timer.stop()
         self._layer_timer.stop()
